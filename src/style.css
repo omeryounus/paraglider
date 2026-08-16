@@ -194,6 +194,13 @@ kbd {
 #hud-vario.lift { color: var(--green); }
 #hud-vario.sink { color: var(--hot); }
 .biome-select { display: block; margin-top: 0.55rem; }
+#hud-source {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+#btn-cam { background: linear-gradient(160deg, #d8e6f0, #8aa4b8); }
 .biome-select select {
   width: 100%;
   margin-top: 0.18rem;

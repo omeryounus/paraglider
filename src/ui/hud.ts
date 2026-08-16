@@ -19,6 +19,7 @@ export interface HudRefs {
   chip: HTMLElement;
   speedLines: HTMLElement;
   biome: HTMLSelectElement;
+  source: HTMLElement;
 }
 
 export function bindHud(): HudRefs {
@@ -38,6 +39,7 @@ export function bindHud(): HudRefs {
     chip: must('#hud-chip'),
     speedLines: must('#speed-lines'),
     biome: must('#hud-biome') as HTMLSelectElement,
+    source: must('#hud-source'),
   };
 }
 
@@ -55,6 +57,10 @@ export function fillBiomeSelect(hud: HudRefs, current: LevelId, onPick: (id: Lev
 
 export function setHudVisible(hud: HudRefs, visible: boolean): void {
   hud.root.hidden = !visible;
+}
+
+export function setTerrainSource(hud: HudRefs, studio: boolean, asset: string): void {
+  hud.source.textContent = studio ? `Terrain Studio · ${asset}.glb` : 'Procedural fallback';
 }
 
 export function paintHud(

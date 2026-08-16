@@ -95,6 +95,7 @@ function upgradeMaterial(
         });
   std.roughness = 0.9;
   std.metalness = 0.05;
+  std.vertexColors = true;
   if (!std.normalMap) {
     std.normalMap = detail;
     std.normalScale = new THREE.Vector2(0.62, 0.62);

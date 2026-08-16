@@ -1,10 +1,14 @@
 import type { InputState } from '../game/input';
 
-export function bindTouch(setTouch: (partial: Partial<InputState>) => void): void {
+export function bindTouch(
+  setTouch: (partial: Partial<InputState>) => void,
+  toggleFpv?: () => void,
+): void {
   const stick = document.querySelector<HTMLElement>('#stick');
   const knob = document.querySelector<HTMLElement>('#stick-knob');
   const boost = document.querySelector<HTMLElement>('#btn-boost');
   const flare = document.querySelector<HTMLElement>('#btn-flare');
+  const cam = document.querySelector<HTMLElement>('#btn-cam');
   if (!stick || !knob || !boost || !flare) return;
 
   let tracking = false;
@@ -61,4 +65,8 @@ export function bindTouch(setTouch: (partial: Partial<InputState>) => void): voi
   };
   hold(boost, 'boost');
   hold(flare, 'flare');
+  cam?.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    toggleFpv?.();
+  });
 }

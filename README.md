@@ -5,7 +5,7 @@ Arcade precision flight built with **Vite**, **Three.js**, and **TypeScript**. D
 - Live: [https://paraglider-six.vercel.app](https://paraglider-six.vercel.app)
 - Repo: [https://github.com/omeryounus/paraglider](https://github.com/omeryounus/paraglider)
 
-Each biome plays immediately on a procedural stand-in. Drop a Studio GLB at `public/terrains/{mapId}.glb` to swap in a hand-authored landscape.
+Each biome ships a Terrain Studio–style GLB in `public/terrains/`. If a file is missing, the game falls back to a procedural heightmap.
 
 ## Courses
 
@@ -31,28 +31,27 @@ Stars are awarded from score thresholds. Best run is stored in `localStorage`.
 
 ## Controls
 
-| Input | Action |
-| --- | --- |
-| `W` / `↓` | Dive — accelerate toward 22 m/s |
-| `S` / `↑` / `Space` | Flare — bleed to 6 m/s |
-| `A` `D` / arrows | Bank / yaw |
-| `Shift` | Boost (2×, drains meter) |
-| `R` | Retry |
-
-On touch devices a virtual stick plus Boost / Flare buttons appear.
+| Action | Keyboard | Touch / Mobile |
+| :--- | :--- | :--- |
+| **Pitch Down (Dive / Speed)** | `W` / `Down Arrow` | Virtual Stick Forward |
+| **Pitch Up / Flare (Brake)** | `S` / `Up Arrow` / `Space` | Flare Button |
+| **Steer / Bank** | `A` / `D` or `Left` / `Right` | Virtual Stick Left / Right |
+| **Boost Rush** | `Shift` | Boost Button |
+| **Toggle Camera (3rd / Cockpit)** | `V` | Cam Button |
+| **Retry** | `R` | — |
 
 ## Terrain Studio maps
 
-Place Terrain Studio exports here:
+Boards from [Terrain Studio](https://terrains.zyfod.dev/) live here:
 
 ```
-public/terrains/mountain.glb
-public/terrains/island.glb
-public/terrains/desert.glb
-public/terrains/hybrid.glb
+public/terrains/mountain.glb   — Mountain Range
+public/terrains/island.glb     — Tropical Island
+public/terrains/desert.glb     — Desert Dunes
+public/terrains/hybrid.glb     — Geological Hybrid
 ```
 
-Draco meshes are supported. The loader prefers a `Collision_Mesh` node, then `Terrain_Surface`. Tiny boards are auto-scaled. Without a file, the matching procedural biome is used.
+Re-export a template as GLB from the site and replace the matching file to fly your own landscape. Draco meshes are supported. The loader prefers a `Collision_Mesh` node, then `Terrain_Surface`. Tiny boards are auto-scaled.
 
 ## Develop
 

@@ -11,6 +11,7 @@ export function createInput(): {
   state: InputState;
   bind: () => void;
   setTouch: (partial: Partial<InputState>) => void;
+  toggleFpv: () => void;
 } {
   const keys = new Set<string>();
   const state: InputState = { dive: 0, steer: 0, boost: false, flare: false, pause: false, fpv: false };
@@ -52,5 +53,9 @@ export function createInput(): {
     sync();
   };
 
-  return { state, bind, setTouch };
+  const toggleFpv = (): void => {
+    state.fpv = !state.fpv;
+  };
+
+  return { state, bind, setTouch, toggleFpv };
 }

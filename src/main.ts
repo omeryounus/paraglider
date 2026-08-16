@@ -34,7 +34,7 @@ import type { FlightState, LevelDef, LevelId, Progress, ScoreState } from './gam
 import { createGlider, poseGlider } from './entities/glider';
 import { createThermalDust, spawnPopup, updatePopups, updateThermalDust, type Popup } from './entities/effects';
 import { createWaypointArrow, updateWaypointArrow } from './entities/waypointArrow';
-import { bindHud, fillBiomeSelect, paintHud, setHudVisible } from './ui/hud';
+import { bindHud, fillBiomeSelect, paintHud, setHudVisible, setTerrainSource } from './ui/hud';
 import {
   bindMenus,
   hideResults,
@@ -151,6 +151,7 @@ async function startLevel(id: LevelId): Promise<void> {
   );
   snapCamera(spawn, flight.heading);
   fillBiomeSelect(hud, level.id, (next) => void startLevel(next));
+  setTerrainSource(hud, terrain.fromStudio, level.asset);
   setLoader(menus, 'Ready', true);
   setHudVisible(hud, true);
 }
@@ -287,7 +288,7 @@ function frame(): void {
 
 function boot(): void {
   input.bind();
-  bindTouch(input.setTouch);
+  bindTouch(input.setTouch, input.toggleFpv);
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
