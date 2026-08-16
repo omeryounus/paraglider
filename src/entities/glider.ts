@@ -199,42 +199,33 @@ function skin(color: number, rough = 0.65, metal = 0.06): THREE.MeshStandardMate
 
 function createPilot(): PilotRig {
   const group = new THREE.Group();
-  const jacket = skin(0x222222, 0.72);
-  const pants = skin(0x1a1a1a, 0.76);
+  const jacket = skin(0x2a3340, 0.62, 0.12);
+  const pants = skin(0x1c2228, 0.7, 0.08);
   const flesh = skin(0xc68642, 0.55);
 
-  const podGeo = new THREE.SphereGeometry(0.34, 14, 12);
-  podGeo.scale(0.78, 0.55, 1.55);
-  const pod = new THREE.Mesh(
-    podGeo,
-    new THREE.MeshStandardMaterial({
-      color: 0x222222,
-      roughness: 0.48,
-      metalness: 0.12,
-      transparent: false,
-      opacity: 1,
-      depthWrite: true,
-      fog: false,
-    }),
-  );
-  pod.position.set(0, 0.12, 0.28);
-  pod.rotation.x = 0.18;
+  const carbon = new THREE.MeshStandardMaterial({
+    color: 0x1a2026,
+    roughness: 0.34,
+    metalness: 0.28,
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+    fog: false,
+  });
+  const podGeo = new THREE.SphereGeometry(0.36, 18, 14);
+  podGeo.scale(0.72, 0.48, 1.72);
+  const pod = new THREE.Mesh(podGeo, carbon);
+  pod.position.set(0, 0.1, 0.34);
+  pod.rotation.x = 0.12;
   pod.castShadow = true;
 
-  const nose = new THREE.Mesh(
-    new THREE.ConeGeometry(0.16, 0.42, 10),
-    new THREE.MeshStandardMaterial({
-      color: 0x1a1a1a,
-      roughness: 0.45,
-      metalness: 0.14,
-      transparent: false,
-      opacity: 1,
-      depthWrite: true,
-      fog: false,
-    }),
-  );
+  const keel = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 1.15), carbon);
+  keel.position.set(0, -0.02, 0.42);
+  keel.castShadow = true;
+
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.48, 12), carbon);
   nose.rotation.x = Math.PI / 2;
-  nose.position.set(0, 0.06, 0.82);
+  nose.position.set(0, 0.05, 0.98);
   nose.castShadow = true;
 
   const torso = new THREE.Group();
@@ -251,23 +242,24 @@ function createPilot(): PilotRig {
   const helmet = new THREE.Mesh(
     new THREE.SphereGeometry(0.125, 16, 12),
     new THREE.MeshStandardMaterial({
-      color: 0x2a2a2e,
-      roughness: 0.38,
-      metalness: 0.16,
+      color: 0x1c242c,
+      roughness: 0.28,
+      metalness: 0.35,
       transparent: false,
       opacity: 1,
       depthWrite: true,
       fog: false,
     }),
   );
-  helmet.scale.set(1, 1.06, 1.1);
+  helmet.scale.set(1.02, 1.08, 1.14);
   helmet.castShadow = true;
   const visor = new THREE.Mesh(
-    new THREE.SphereGeometry(0.108, 14, 10, 0, Math.PI * 2, 0.55, 1.05),
+    new THREE.SphereGeometry(0.11, 16, 12, 0, Math.PI * 2, 0.48, 1.12),
     new THREE.MeshStandardMaterial({
-      color: 0xffaa00,
+      color: 0x08141c,
       roughness: 0.1,
       metalness: 0.9,
+      envMapIntensity: 1.4,
       transparent: false,
       opacity: 1,
       depthWrite: true,
@@ -309,15 +301,15 @@ function createPilot(): PilotRig {
   const rightArm = makeArm(1);
   torso.add(leftArm, rightArm);
 
-  const boots = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.28, 3, 6), pants);
-  boots.rotation.x = 1.2;
-  boots.position.set(0, 0.02, 0.62);
-  boots.castShadow = true;
-  const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.16), skin(0x111111, 0.5));
-  bootL.position.set(-0.06, -0.02, 0.86);
+  const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.22, 4, 8), pants);
+  thigh.rotation.x = 1.35;
+  thigh.position.set(0, 0.04, 0.48);
+  thigh.castShadow = true;
+  const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.055, 0.2), skin(0x111111, 0.42, 0.12));
+  bootL.position.set(-0.07, -0.01, 0.92);
   bootL.castShadow = true;
   const bootR = bootL.clone();
-  bootR.position.x = 0.06;
+  bootR.position.x = 0.07;
 
   const leftRiser = new THREE.Object3D();
   leftRiser.position.set(-0.35, 0.58, 0);
@@ -335,7 +327,7 @@ function createPilot(): PilotRig {
   rightRiser.add(carabiner());
   group.add(leftRiser, rightRiser);
 
-  group.add(pod, nose, torso, boots, bootL, bootR);
+  group.add(pod, keel, nose, torso, thigh, bootL, bootR);
   return {
     group,
     torso,
@@ -363,8 +355,9 @@ export function poseGlider(
   const lean = THREE.MathUtils.clamp(steer, -1, 1);
   const flare = flight.flare ? 1 : 0;
   const dive = THREE.MathUtils.smoothstep(flight.pitch, 0.12, 0.45);
-  pilot.torso.rotation.z = damp(pilot.torso.rotation.z, lean * 0.28, 7, dt);
+  pilot.torso.rotation.z = damp(pilot.torso.rotation.z, lean * 0.46, 7, dt);
   pilot.torso.rotation.x = damp(pilot.torso.rotation.x, dive * 0.28 - flare * 0.06, 6, dt);
+  pilot.headShell.rotation.z = damp(pilot.headShell.rotation.z, lean * 0.18, 8, dt);
   const leftBrake = Math.max(0, lean) + flare;
   const rightBrake = Math.max(0, -lean) + flare;
   pilot.leftArm.rotation.x = damp(pilot.leftArm.rotation.x, -1.05 + leftBrake * 0.85, 8, dt);

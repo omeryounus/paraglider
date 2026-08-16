@@ -18,10 +18,10 @@ export interface BiomeSplat {
 
 export const BIOME_SPLAT: Record<LevelId, BiomeSplat> = {
   alpine: {
-    grass: new THREE.Vector3(0.28, 0.52, 0.16),
-    rock: new THREE.Vector3(0.4, 0.38, 0.36),
-    scree: new THREE.Vector3(0.46, 0.36, 0.22),
-    snow: new THREE.Vector3(0.68, 0.74, 0.8),
+    grass: new THREE.Vector3(0.3, 0.44, 0.26),
+    rock: new THREE.Vector3(0.44, 0.44, 0.46),
+    scree: new THREE.Vector3(0.4, 0.37, 0.3),
+    snow: new THREE.Vector3(0.74, 0.78, 0.82),
     snowHeight: 350,
     grassScale: 0.11,
     grassMax: 30,
@@ -33,7 +33,7 @@ export const BIOME_SPLAT: Record<LevelId, BiomeSplat> = {
   coastal: {
     grass: new THREE.Vector3(0.14, 0.46, 0.13),
     rock: new THREE.Vector3(0.16, 0.14, 0.14),
-    scree: new THREE.Vector3(0.78, 0.62, 0.32),
+    scree: new THREE.Vector3(0.7, 0.6, 0.4),
     snow: new THREE.Vector3(0.82, 0.8, 0.76),
     snowHeight: 520,
     grassScale: 0.1,
@@ -44,30 +44,30 @@ export const BIOME_SPLAT: Record<LevelId, BiomeSplat> = {
     strata: 0,
   },
   dune: {
-    grass: new THREE.Vector3(0.78, 0.5, 0.18),
-    rock: new THREE.Vector3(0.56, 0.18, 0.08),
-    scree: new THREE.Vector3(0.8, 0.54, 0.22),
-    snow: new THREE.Vector3(0.86, 0.74, 0.52),
+    grass: new THREE.Vector3(0.6, 0.48, 0.3),
+    rock: new THREE.Vector3(0.5, 0.36, 0.26),
+    scree: new THREE.Vector3(0.58, 0.46, 0.32),
+    snow: new THREE.Vector3(0.78, 0.72, 0.62),
     snowHeight: 155,
     grassScale: 0.095,
     grassMax: 24,
     rockMin: 28,
     beachMin: -999,
     beachMax: -998,
-    strata: 0.15,
+    strata: 0.08,
   },
   ridge: {
-    grass: new THREE.Vector3(0.44, 0.36, 0.16),
-    rock: new THREE.Vector3(0.56, 0.3, 0.14),
-    scree: new THREE.Vector3(0.62, 0.44, 0.22),
-    snow: new THREE.Vector3(0.78, 0.72, 0.62),
+    grass: new THREE.Vector3(0.38, 0.36, 0.26),
+    rock: new THREE.Vector3(0.46, 0.4, 0.34),
+    scree: new THREE.Vector3(0.48, 0.42, 0.32),
+    snow: new THREE.Vector3(0.76, 0.76, 0.74),
     snowHeight: 380,
     grassScale: 0.1,
     grassMax: 28,
     rockMin: 33,
     beachMin: -999,
     beachMax: -998,
-    strata: 1,
+    strata: 0.28,
   },
 };
 
@@ -235,7 +235,7 @@ function bindSplatUniforms(
   shader.uniforms.uBeachMax = { value: pal.beachMax };
   shader.uniforms.uStrata = { value: pal.strata };
   shader.uniforms.uSkirtInner = { value: extent * 0.5 };
-  shader.uniforms.uFogColor = { value: new THREE.Color(0xa8c8e8) };
+  shader.uniforms.uFogColor = { value: new THREE.Color(0xb7d2e8) };
 }
 
 export function createSplatMaterial(biome: LevelId, extent = 1600): THREE.MeshStandardMaterial {
@@ -291,7 +291,7 @@ export function createSplatMaterial(biome: LevelId, extent = 1600): THREE.MeshSt
         normal = normalize(mat3(viewMatrix) * splatWorldNormal(tw, normalize(vWn)));`,
       );
   };
-  mat.customProgramCacheKey = () => `terrain-splat-v8-${biome}`;
+  mat.customProgramCacheKey = () => `terrain-splat-v9-${biome}`;
   return mat;
 }
 

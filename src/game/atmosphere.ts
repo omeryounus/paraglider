@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import type { LevelDef } from './types';
 
-const FOG_COLOR = 0xa8c8e8;
+const FOG_COLOR = 0xb7d2e8;
 const SUN_DISTANCE = 1000;
 
 export interface Atmosphere {
@@ -45,10 +45,10 @@ export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphe
   sunDir.setFromSphericalCoords(1, phi, theta);
   uniforms['sunPosition'].value.copy(sunDir);
 
-  scene.fog = new THREE.Fog(FOG_COLOR, 400, 3200);
+  scene.fog = new THREE.Fog(FOG_COLOR, 300, 4000);
   scene.background = new THREE.Color(FOG_COLOR);
 
-  const hemi = new THREE.HemisphereLight(0xb0d8fd, 0x6b6357, 1.15);
+  const hemi = new THREE.HemisphereLight(0xb8dcff, 0x5a564c, 1.25);
   scene.add(hemi);
   const fill = new THREE.AmbientLight(0x9ec4e6, 0.38);
   scene.add(fill);

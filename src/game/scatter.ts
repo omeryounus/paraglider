@@ -71,61 +71,6 @@ function cactusGeometry(): THREE.BufferGeometry {
   return merged;
 }
 
-function boulderGeometry(): THREE.BufferGeometry {
-  const geo = new THREE.IcosahedronGeometry(0.7, 0);
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const y = pos.getY(i);
-    const z = pos.getZ(i);
-    const n = 0.78 + hash2(i, 3) * 0.45;
-    pos.setXYZ(i, x * n, y * n * 0.72, z * n);
-  }
-  geo.computeVertexNormals();
-  return geo;
-}
-
-function makeVertexHeightFn(
-  root: THREE.Object3D,
-  fallback: (x: number, z: number) => number,
-): (x: number, z: number) => number {
-  const cell = 4;
-  const heights = new Map<number, number>();
-  const keyOf = (ix: number, iz: number) => ((ix + 32768) << 16) | (iz + 32768);
-  const tmp = new THREE.Vector3();
-  root.traverse((obj) => {
-    const mesh = obj as THREE.Mesh;
-    if (!mesh.isMesh || (mesh as THREE.InstancedMesh).isInstancedMesh) return;
-    if (mesh.name === 'Horizon_Skirt' || mesh.name.startsWith('Scatter')) return;
-    const pos = mesh.geometry?.attributes.position;
-    if (!pos || pos.count < 64) return;
-    mesh.updateWorldMatrix(true, false);
-    for (let i = 0; i < pos.count; i++) {
-      tmp.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
-      heights.set(keyOf(Math.round(tmp.x / cell), Math.round(tmp.z / cell)), tmp.y);
-    }
-  });
-  if (heights.size < 16) return fallback;
-  return (x, z) => {
-    const ix = Math.round(x / cell);
-    const iz = Math.round(z / cell);
-    let best = Number.NaN;
-    let bestD = 16;
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const y = heights.get(keyOf(ix + dx, iz + dz));
-        if (y === undefined) continue;
-        const d = dx * dx + dz * dz;
-        if (d < bestD) {
-          bestD = d;
-          best = y;
-        }
-      }
-    }
-    return Number.isNaN(best) ? fallback(x, z) : best;
-  };
-}
-
 function slopeAt(sample: (x: number, z: number) => number, x: number, z: number): number {
   const e = 3.2;
   const dx = (sample(x + e, z) - sample(x - e, z)) / (2 * e);
@@ -140,8 +85,7 @@ export function addEnvironmentScatter(
   pad: THREE.Vector3,
   extent: number,
 ): void {
-  const treeBudget = level.id === 'dune' ? 320 : level.id === 'ridge' ? 1200 : 1800;
-  const rockBudget = level.id === 'dune' ? 1100 : level.id === 'alpine' ? 900 : 700;
+  const treeBudget = level.id === 'dune' ? 140 : level.id === 'ridge' ? 280 : 320;
   const treeGeo =
     level.id === 'coastal' ? palmGeometry() : level.id === 'dune' ? cactusGeometry() : pineGeometry();
   const treeMat = new THREE.MeshStandardMaterial({
@@ -155,39 +99,26 @@ export function addEnvironmentScatter(
   trees.receiveShadow = true;
   trees.name = 'ScatterTrees';
 
-  const rockColor =
-    level.id === 'dune' ? 0x8a4a28 : level.id === 'coastal' ? 0x2a2828 : level.id === 'ridge' ? 0x8a6a48 : 0x6a645c;
-  const rocks = new THREE.InstancedMesh(
-    boulderGeometry(),
-    new THREE.MeshStandardMaterial({ color: rockColor, roughness: 0.93, metalness: 0.04 }),
-    rockBudget,
-  );
-  rocks.castShadow = true;
-  rocks.receiveShadow = true;
-  rocks.name = 'ScatterRocks';
-
-  const height = makeVertexHeightFn(parent, sampleHeight);
   const dummy = new THREE.Object3D();
   const padR = 34;
-  const span = extent * 0.9;
-  const treeSlopeMax = (25 * Math.PI) / 180;
-  const cliffSlope = (48 * Math.PI) / 180;
-  const treeAltMax = 250;
-  const waterMin = level.water ? level.waterLevel + 1.6 : 4;
+  const span = extent * 0.72;
+  const treeSlopeMax = (22 * Math.PI) / 180;
+  const treeAltMax = 220;
+  const waterMin = level.water ? level.waterLevel + 1.6 : 8;
 
   let treesN = 0;
   let guard = 0;
-  while (treesN < treeBudget && guard < treeBudget * 14) {
+  while (treesN < treeBudget && guard < treeBudget * 6) {
     guard += 1;
     const x = (hash2(guard, 11) - 0.5) * span;
     const z = (hash2(guard + 5, 19) - 0.5) * span;
     if (Math.hypot(x - pad.x, z - pad.z) < padR) continue;
-    const y = height(x, z);
+    const y = sampleHeight(x, z);
     if (y < waterMin || y > treeAltMax) continue;
-    const ang = slopeAt(height, x, z);
+    const ang = slopeAt(sampleHeight, x, z);
     if (ang >= treeSlopeMax) continue;
-    const s = 0.85 + hash2(treesN, 4) * 1.35;
-    dummy.position.set(x, y + 0.02, z);
+    const s = 0.85 + hash2(treesN, 4) * 1.15;
+    dummy.position.set(x, y, z);
     dummy.rotation.set(0, hash2(treesN, 8) * Math.PI * 2, 0);
     dummy.scale.setScalar(s);
     dummy.updateMatrix();
@@ -195,31 +126,7 @@ export function addEnvironmentScatter(
     treesN += 1;
   }
 
-  let rocksN = 0;
-  guard = 0;
-  while (rocksN < rockBudget && guard < rockBudget * 12) {
-    guard += 1;
-    const x = (hash2(guard + 9000, 23) - 0.5) * span;
-    const z = (hash2(guard + 17, 29) - 0.5) * span;
-    if (Math.hypot(x - pad.x, z - pad.z) < padR) continue;
-    const y = height(x, z);
-    if (y < (level.water ? level.waterLevel + 0.4 : 2)) continue;
-    const ang = slopeAt(height, x, z);
-    if (ang >= cliffSlope) continue;
-    const preferRidge = rocksN % 5 < 2;
-    if (preferRidge && (ang < 0.12 || ang > 0.72)) continue;
-    const s = 0.55 + hash2(rocksN, 6) * 1.85;
-    dummy.position.set(x, y + 0.22 * s, z);
-    dummy.rotation.set(hash2(rocksN, 1) * 0.7, hash2(rocksN, 2) * Math.PI * 2, hash2(rocksN, 3) * 0.55);
-    dummy.scale.set(s, s * (0.58 + hash2(rocksN, 7) * 0.5), s);
-    dummy.updateMatrix();
-    rocks.setMatrixAt(rocksN, dummy.matrix);
-    rocksN += 1;
-  }
-
   trees.count = treesN;
-  rocks.count = rocksN;
   trees.instanceMatrix.needsUpdate = true;
-  rocks.instanceMatrix.needsUpdate = true;
-  parent.add(trees, rocks);
+  parent.add(trees);
 }

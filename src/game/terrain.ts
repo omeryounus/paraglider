@@ -280,13 +280,13 @@ function pruneOrphanMeshes(root: THREE.Group): void {
 }
 
 function addGroundFill(scene: THREE.Scene, minY: number): void {
-  const geo = new THREE.PlaneGeometry(12000, 12000, 1, 1);
+  const geo = new THREE.PlaneGeometry(15000, 15000, 1, 1);
   geo.rotateX(-Math.PI / 2);
   ensureUpNormals(geo);
   const mesh = new THREE.Mesh(
     geo,
     new THREE.MeshStandardMaterial({
-      color: 0x2c3330,
+      color: 0x6e8aa0,
       roughness: 1,
       metalness: 0,
       fog: true,
