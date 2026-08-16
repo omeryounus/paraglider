@@ -42,7 +42,7 @@ export function renderLevelSelect(
       <strong>${level.name}</strong>
       <p>${level.blurb}</p>
       <span class="stars">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>
-      <small>${best ? `Best ${best.toLocaleString()}` : 'Unflown'}</small>
+      <small>${best ? `Best ${best.toLocaleString()}` : 'Unflown'} · ${formatTime(level.parTime)} on the clock</small>
     `;
     card.addEventListener('click', () => onPick(level.id));
     menus.grid.appendChild(card);

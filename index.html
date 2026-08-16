@@ -32,8 +32,8 @@
           <p class="banner-kicker">Canyon Rush</p>
           <h1>Pick a biome. Thread the line.</h1>
           <p class="banner-hint">
-            Green rings keep the combo. Gold is the risky line. Cyan is raw speed.
-            Flare the bullseye.
+            Fly through the glowing rings. The yellow arrow on screen always points to the next one.
+            Space flares for a soft landing. Shift boosts.
           </p>
         </div>
         <div id="level-grid"></div>
@@ -80,6 +80,7 @@
           <span class="dial-label">Biome</span>
           <select id="hud-biome"></select>
         </label>
+        <div id="hud-hint">Fly through the next glowing ring</div>
         <small id="hud-source">Procedural fallback</small>
         <div id="hud-chip" hidden></div>
       </aside>
@@ -89,9 +90,9 @@
       <div id="way-mark" hidden>▲</div>
 
       <div id="cam-rig" hidden>
-        <button type="button" id="btn-zoom-in" title="Zoom in">+</button>
-        <button type="button" id="btn-zoom-out" title="Zoom out">−</button>
-        <button type="button" id="btn-cam-reset" title="Reset view">RESET</button>
+        <button type="button" id="btn-zoom-in" title="Zoom in">IN</button>
+        <button type="button" id="btn-zoom-out" title="Zoom out">OUT</button>
+        <button type="button" id="btn-cam-reset" title="Reset view">VIEW</button>
       </div>
 
       <div id="touch" class="touch-only">

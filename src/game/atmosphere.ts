@@ -33,8 +33,8 @@ export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphe
 
   const sunDir = new THREE.Vector3();
   const uniforms = skyMat.uniforms;
-  uniforms['turbidity'].value = 8;
-  uniforms['rayleigh'].value = 1.5;
+  uniforms['turbidity'].value = 5.5;
+  uniforms['rayleigh'].value = 1.7;
   uniforms['mieCoefficient'].value = 0.005;
   uniforms['mieDirectionalG'].value = 0.8;
 

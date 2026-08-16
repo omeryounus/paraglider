@@ -141,12 +141,12 @@ export function updateCourse(
     const toPlayer = pos.clone().sub(ring.position);
     const along = toPlayer.dot(ring.normal);
     const radial = toPlayer.clone().addScaledVector(ring.normal, -along);
-    const inside = radial.length() <= ring.radius * 0.95;
-    if (Math.abs(along) < 3.2 && inside) {
+    const inside = radial.length() <= ring.radius * 1.22;
+    if (Math.abs(along) < 5.2 && inside) {
       ring.collected = true;
       course.active += 1;
       event = { kind: 'ring', ring, popup: popupFor(ring.type), color: colorFor(ring.type) };
-    } else if (along > ring.radius * 0.65 && !inside) {
+    } else if (along > ring.radius * 1.15 && !inside) {
       ring.missed = true;
       course.active += 1;
       event = { kind: 'miss', ring };

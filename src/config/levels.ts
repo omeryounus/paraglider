@@ -7,7 +7,7 @@ const alpine: LevelDef = {
   template: 'Mountain Range',
   asset: 'mountain',
   blurb: 'Thread a high alpine canyon. Dive the speed chain, then flare the valley pad.',
-  parTime: 78,
+  parTime: 100,
   starScores: [9000, 16000, 24000],
   spawn: [0, 450, 0],
   fog: 0.00055,
@@ -63,7 +63,7 @@ const alpine: LevelDef = {
     { t: 0.57, lateral: -10, radius: 1.4, height: 20 },
     { t: 0.8, lateral: 11, radius: 1.4, height: 18 },
   ],
-  gustStrength: 3.4,
+  gustStrength: 2.1,
 };
 
 const coastal: LevelDef = {
@@ -73,7 +73,7 @@ const coastal: LevelDef = {
   template: 'Tropical Island',
   asset: 'island',
   blurb: 'Island-hop at wavetop height. Skim the lagoon, then nail the beach bullseye.',
-  parTime: 72,
+  parTime: 95,
   starScores: [8000, 14500, 22000],
   spawn: [0, 320, 0],
   fog: 0.0007,
@@ -123,7 +123,7 @@ const coastal: LevelDef = {
     { t: 0.38, lateral: 16, radius: 1.4, height: 16 },
     { t: 0.74, lateral: -12, radius: 1.4, height: 12 },
   ],
-  gustStrength: 5.2,
+  gustStrength: 3.2,
 };
 
 const dune: LevelDef = {
@@ -133,7 +133,7 @@ const dune: LevelDef = {
   template: 'Desert',
   asset: 'desert',
   blurb: 'A long thermal trial. Ride golden vortices, dodge dust-red downdrafts.',
-  parTime: 88,
+  parTime: 110,
   starScores: [8500, 15500, 23500],
   spawn: [0, 280, 0],
   fog: 0.00095,
@@ -190,7 +190,7 @@ const dune: LevelDef = {
     { t: 0.62, lateral: 15, radius: 1.4, height: 22 },
     { t: 0.86, lateral: -10, radius: 1.4, height: 18 },
   ],
-  gustStrength: 7.4,
+  gustStrength: 4.4,
 };
 
 const ridge: LevelDef = {
@@ -200,7 +200,7 @@ const ridge: LevelDef = {
   template: 'Geological Hybrid',
   asset: 'hybrid',
   blurb: 'Terraced cliff drops and tight gaps. Miss a line and the combo dies.',
-  parTime: 80,
+  parTime: 105,
   starScores: [10000, 18000, 27000],
   spawn: [0, 380, 0],
   fog: 0.0008,
@@ -256,7 +256,7 @@ const ridge: LevelDef = {
     { t: 0.64, lateral: 8, radius: 1.2, height: 16 },
     { t: 0.85, lateral: -7, radius: 1.2, height: 15 },
   ],
-  gustStrength: 4.1,
+  gustStrength: 2.6,
 };
 
 export const LEVELS: LevelDef[] = [alpine, coastal, dune, ridge];

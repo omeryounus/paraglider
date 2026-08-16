@@ -241,15 +241,15 @@ kbd {
   gap: 0.4rem;
 }
 #cam-rig button {
-  min-width: 44px;
-  height: 42px;
-  padding: 0 0.7rem;
+  min-width: 52px;
+  height: 40px;
+  padding: 0 0.65rem;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--glass);
   color: var(--ink);
-  font: 700 1.05rem Outfit, system-ui, sans-serif;
-  letter-spacing: 0.04em;
+  font: 700 0.72rem Outfit, system-ui, sans-serif;
+  letter-spacing: 0.1em;
   cursor: pointer;
   backdrop-filter: blur(10px);
 }
@@ -281,9 +281,20 @@ kbd {
   z-index: 13;
   pointer-events: none;
   color: #ffe082;
-  font-size: 1.35rem;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
-  filter: drop-shadow(0 0 6px rgba(255, 224, 130, 0.55));
+  font-size: 1.7rem;
+  font-weight: 800;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.65);
+  filter: drop-shadow(0 0 8px rgba(255, 224, 130, 0.7));
+}
+#hud-hint {
+  margin-top: 0.55rem;
+  padding: 0.38rem 0.5rem;
+  border-radius: 10px;
+  background: rgba(60, 230, 255, 0.1);
+  color: #d9f8ff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 #way-mark[hidden] { display: none !important; }
 .score-pop {

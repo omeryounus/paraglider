@@ -34,34 +34,37 @@ export function createRing(
   );
   group.quaternion.copy(quat);
 
+  const size = radius * 1.22;
   const torus = new THREE.Mesh(
-    new THREE.TorusGeometry(radius, type === 'gold' ? 0.42 : 0.36, 10, 40),
+    new THREE.TorusGeometry(size, type === 'gold' ? 0.55 : 0.48, 12, 48),
     new THREE.MeshStandardMaterial({
       color,
       emissive: color,
-      emissiveIntensity: type === 'boost' ? 2.4 : 1.85,
-      roughness: 0.28,
-      metalness: 0.08,
+      emissiveIntensity: type === 'boost' ? 2.8 : 2.2,
+      roughness: 0.22,
+      metalness: 0.06,
     }),
   );
   const glow = new THREE.Mesh(
-    new THREE.TorusGeometry(radius, type === 'gold' ? 0.72 : 0.62, 8, 32),
+    new THREE.TorusGeometry(size, type === 'gold' ? 0.95 : 0.82, 10, 40),
     new THREE.MeshBasicMaterial({
       color,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.32,
       depthWrite: false,
       side: THREE.DoubleSide,
+      toneMapped: false,
     }),
   );
   const disc = new THREE.Mesh(
-    new THREE.CircleGeometry(radius * 0.92, 28),
+    new THREE.CircleGeometry(size * 0.94, 32),
     new THREE.MeshBasicMaterial({
       color,
       transparent: true,
-      opacity: 0.08,
+      opacity: 0.14,
       side: THREE.DoubleSide,
       depthWrite: false,
+      toneMapped: false,
     }),
   );
   group.add(torus, glow, disc);
@@ -70,7 +73,7 @@ export function createRing(
     torus,
     position: position.clone(),
     normal: normal.clone().normalize(),
-    radius,
+    radius: size,
     type,
     collected: false,
     missed: false,

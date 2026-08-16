@@ -25,7 +25,7 @@ export function createFlight(): FlightState {
     bank: 0,
     speed: BASE_SPEED,
     verticalSpeed: -BASE_SPEED / GLIDE_RATIO,
-    boost: 45,
+    boost: 72,
     boosting: false,
     flare: false,
     speedBoost: 0,
@@ -82,7 +82,7 @@ export function stepPhysics(ctx: PhysicsContext): void {
     sink += THERMAL_LIFT;
     flight.boost = Math.min(BOOST_MAX, flight.boost + 22 * dt);
   }
-  if (ctx.inDowndraft && !wantBoost) sink -= 6.5;
+  if (ctx.inDowndraft && !wantBoost) sink -= 3.8;
   flight.verticalSpeed = sink;
 
   if (wantBoost) flight.boost = Math.max(0, flight.boost - BOOST_DRAIN * dt);
@@ -113,6 +113,16 @@ export function stepPhysics(ctx: PhysicsContext): void {
 
 export function grantBoost(flight: FlightState, amount: number): void {
   flight.boost = Math.min(BOOST_MAX, flight.boost + amount);
+}
+
+export function assistToward(flight: FlightState, from: THREE.Vector3, target: THREE.Vector3, dt: number): void {
+  const desired = Math.atan2(target.x - from.x, target.z - from.z);
+  let delta = desired - flight.heading;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  const dist = from.distanceTo(target);
+  const pull = dist < 160 ? 0.62 : 0.32;
+  flight.heading += delta * pull * dt;
 }
 
 export function triggerSpeedRing(flight: FlightState): void {

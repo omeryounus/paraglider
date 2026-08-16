@@ -21,7 +21,7 @@ Each biome ships a Terrain Studio–style GLB in `public/terrains/`. If a file i
 - **Green rings** +500 and grow combo
 - **Gold rings** +1,500 and fill boost
 - **Cyan boost rings** +1,000 and a 2× speed surge
-- Miss a ring: combo dies and the clock loses 4 seconds
+- Miss a ring: combo drops and the clock loses 2 seconds
 - Thermals refill boost and launch you
 - Red downdrafts dump altitude unless you boost through
 - Near-miss skims award live points and charge boost

@@ -72,6 +72,7 @@ export function paintHud(
   timeLeft: number,
   ringsHit: number,
   ringsTotal: number,
+  nextHint?: string,
 ): void {
   hud.score.textContent = Math.floor(score.total).toLocaleString();
   hud.combo.textContent = `${score.combo.toFixed(0)}×`;
@@ -89,7 +90,9 @@ export function paintHud(
   const liveGlide = vari < -0.05 ? flight.speed / Math.abs(vari) : 99;
   hud.glide.textContent = liveGlide > 40 ? '∞' : liveGlide.toFixed(1);
   hud.time.textContent = formatTime(timeLeft);
-  hud.time.classList.toggle('low', timeLeft < 12);
+  hud.time.classList.toggle('low', timeLeft < 16);
+  const hint = document.querySelector('#hud-hint');
+  if (hint) hint.textContent = nextHint ?? 'Fly through the next glowing ring';
   const deg = ((180 / Math.PI) * flight.heading % 360 + 360) % 360;
   hud.compass.style.transform = `rotate(${-deg}deg)`;
 

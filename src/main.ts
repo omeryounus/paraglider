@@ -15,7 +15,7 @@ import {
   type Course,
 } from './game/course';
 import { createInput } from './game/input';
-import { createFlight, grantBoost, stepPhysics, triggerSpeedRing } from './game/physics';
+import { assistToward, createFlight, grantBoost, stepPhysics, triggerSpeedRing } from './game/physics';
 import { createComposer, resizeComposer } from './game/postfx';
 import {
   awardLanding,
@@ -246,6 +246,8 @@ function tickPlay(dt: number): void {
       inDowndraft: insideHazard(course, pos),
       wind,
     });
+    const magnet = nextRing(course);
+    if (magnet) assistToward(flight, pos, magnet.position, dt);
     tickCombo(score, dt);
     if (flight.nearMiss) awardNearMiss(score, dt);
 
@@ -258,7 +260,7 @@ function tickPlay(dt: number): void {
     } else if (event.kind === 'miss') {
       missRing(score);
       session.timeLeft = Math.max(0, session.timeLeft - MISS_TIME_PENALTY);
-      popups.push(spawnPopup(popupHost, pos, 'MISS −4s', '#ff5a4a'));
+      popups.push(spawnPopup(popupHost, pos, 'MISS −2s', '#ff5a4a'));
     } else if (event.kind === 'orb') {
       const pts = awardOrb(score);
       grantBoost(flight, 18);
@@ -281,7 +283,10 @@ function tickPlay(dt: number): void {
   updateThermalDust(dust, course.thermals, clock.elapsedTime);
   updateWater(terrain.water, dt, atmo.sunDir);
   stepCamera(camera, atmo, pos, flight, dt, glider, input.state.fpv);
-  paintHud(hud, score, flight, session.timeLeft, score.ringsHit, course.rings.length);
+  const hint = nxt
+    ? `Next ring · ${pos.distanceTo(nxt.position).toFixed(0)} m`
+    : 'Flare and land on the bullseye';
+  paintHud(hud, score, flight, session.timeLeft, score.ringsHit, course.rings.length, hint);
   updatePopups(popups, camera, window.innerWidth, window.innerHeight, dt);
 }
 
@@ -336,6 +341,7 @@ function boot(): void {
     if (key === 'r' && (session.phase === 'flying' || session.phase === 'results')) {
       void startLevel(level.id);
     }
+    if (key === 'escape') openMenu();
     if (!live) return;
     if (key === '=' || key === '+') zoomLook(-1);
     if (key === '-' || key === '_') zoomLook(1);
