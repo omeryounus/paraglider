@@ -28,12 +28,12 @@ import {
   tickCombo,
 } from './game/scoring';
 import { loadProgress, newSession, recordResult, type Session } from './game/state';
-import { loadTerrain, type TerrainWorld } from './game/terrain';
+import { loadTerrain, purgeTerrainFromScene, type TerrainWorld } from './game/terrain';
 import { updateWater } from './game/water';
 import type { FlightState, LevelDef, LevelId, Progress, ScoreState } from './game/types';
 import { createGlider, poseGlider } from './entities/glider';
 import { createThermalDust, spawnPopup, updatePopups, updateThermalDust, type Popup } from './entities/effects';
-import { createWaypointArrow, paintWaypointHud, updateWaypointArrow } from './entities/waypointArrow';
+import { paintWaypointHud } from './entities/waypointArrow';
 import { bindHud, fillBiomeSelect, paintHud, setHudVisible, setTerrainSource } from './ui/hud';
 import {
   bindMenus,
@@ -67,8 +67,6 @@ const wind = new THREE.Vector3();
 
 const glider = createGlider();
 scene.add(glider.root);
-const arrow = createWaypointArrow();
-glider.root.add(arrow);
 const wayMark = document.querySelector<HTMLElement>('#way-mark')!;
 const dust = createThermalDust();
 scene.add(dust);
@@ -120,9 +118,11 @@ function clearWorld(): void {
   terrain?.dispose();
   terrain = null;
   course = null;
+  purgeTerrainFromScene(scene);
   atmo?.dispose(scene);
   atmo = null;
   popups.splice(0).forEach((p) => p.el.remove());
+  if (wayMark) wayMark.hidden = true;
 }
 
 async function startLevel(id: LevelId): Promise<void> {
@@ -271,9 +271,13 @@ function tickPlay(dt: number): void {
   poseGlider(glider, flight, input.state.steer, clock.elapsedTime, dt);
   const nxt = nextRing(course);
   const wayTarget = nxt ? nxt.position : course.pad.position;
-  updateWaypointArrow(arrow, pos, wayTarget);
-  arrow.visible = !input.state.fpv;
-  paintWaypointHud(wayMark, camera, wayTarget, session.phase === 'flying' || session.phase === 'countdown');
+  paintWaypointHud(
+    wayMark,
+    camera,
+    pos,
+    wayTarget,
+    (session.phase === 'flying' || session.phase === 'countdown') && !input.state.fpv,
+  );
   updateThermalDust(dust, course.thermals, clock.elapsedTime);
   updateWater(terrain.water, dt, atmo.sunDir);
   stepCamera(camera, atmo, pos, flight, dt, glider, input.state.fpv);

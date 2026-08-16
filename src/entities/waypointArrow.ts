@@ -45,6 +45,7 @@ export function updateWaypointArrow(
 export function paintWaypointHud(
   el: HTMLElement,
   camera: THREE.Camera,
+  from: THREE.Vector3,
   target: THREE.Vector3 | null,
   visible: boolean,
 ): void {
@@ -53,16 +54,24 @@ export function paintWaypointHud(
     return;
   }
   ndc.copy(target).project(camera);
-  const behind = ndc.z > 1;
-  let x = (ndc.x * 0.5 + 0.5) * window.innerWidth;
-  let y = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
-  if (behind || ndc.z < -1) {
-    x = window.innerWidth * 0.5 - ndc.x * window.innerWidth * 0.4;
-    y = 28;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const offscreen = ndc.z > 1 || ndc.x < -1.05 || ndc.x > 1.05 || ndc.y < -1.05 || ndc.y > 1.05;
+  let x = (ndc.x * 0.5 + 0.5) * w;
+  let y = (-ndc.y * 0.5 + 0.5) * h;
+  if (offscreen) {
+    const dx = ndc.z > 1 ? -ndc.x : ndc.x;
+    const dy = ndc.z > 1 ? ndc.y : -ndc.y;
+    const len = Math.hypot(dx, dy) || 1;
+    x = w * 0.5 + (dx / len) * w * 0.42;
+    y = h * 0.5 + (dy / len) * h * 0.38;
   }
-  const pad = 28;
-  x = Math.max(pad, Math.min(window.innerWidth - pad, x));
-  y = Math.max(pad, Math.min(window.innerHeight - pad, y));
+  const pad = 32;
+  x = Math.max(pad, Math.min(w - pad, x));
+  y = Math.max(pad, Math.min(h - pad, y));
+  const yaw = Math.atan2(target.x - from.x, target.z - from.z);
+  const camYaw = Math.atan2(camera.position.x - from.x, camera.position.z - from.z);
+  const deg = THREE.MathUtils.radToDeg(yaw - camYaw);
   el.hidden = false;
-  el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+  el.style.transform = `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${deg.toFixed(1)}deg)`;
 }

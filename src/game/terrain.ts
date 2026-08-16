@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { WORLD_SIZE } from '../config/constants';
-import type { LevelDef, LevelId } from './types';
+import type { LevelDef } from './types';
 import { fbm, valueNoise } from './math';
 import { applyTerrainSplat, createSplatMaterial, ensureUpNormals, smoothTerrainShading } from './terrainShader';
 import { addEnvironmentScatter } from './scatter';
@@ -84,11 +84,39 @@ export function biomeHeight(level: LevelDef, x: number, z: number): number {
   return Math.max(8, 36 + terrace + walls + waves * 0.3);
 }
 
+export function purgeTerrainFromScene(scene: THREE.Scene): void {
+  const drop: THREE.Object3D[] = [];
+  scene.traverse((obj) => {
+    const n = obj.name;
+    if (
+      n === 'Horizon_Skirt' ||
+      n === 'Ground_Fill' ||
+      n === 'Terrain_Studio' ||
+      n === 'Terrain_Board' ||
+      n === 'Terrain_Surface' ||
+      n.startsWith('Biome_')
+    ) {
+      drop.push(obj);
+    }
+  });
+  for (const obj of drop) {
+    obj.removeFromParent();
+    obj.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.geometry?.dispose();
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      mats.forEach((m) => m.dispose());
+    });
+  }
+}
+
 export async function loadTerrain(
   level: LevelDef,
   scene: THREE.Scene,
   sunDir: THREE.Vector3,
 ): Promise<TerrainWorld> {
+  purgeTerrainFromScene(scene);
   const studio =
     (await tryLoad(`/terrains/${level.asset}.glb`)) ?? (await tryLoad(`/terrains/${level.id}.glb`));
   if (studio) {
@@ -112,10 +140,8 @@ function mountStudio(
   scene: THREE.Scene,
   sunDir: THREE.Vector3,
 ): TerrainWorld {
-  const first = new THREE.Box3().setFromObject(root);
-  const size = first.getSize(new THREE.Vector3());
-  if (size.x > 0 && size.x < 90) root.scale.multiplyScalar(480 / size.x);
-  root.updateMatrixWorld(true);
+  root.name = 'Terrain_Studio';
+  fitStudioRoot(root);
   pruneOrphanMeshes(root);
   root.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(root);
@@ -148,7 +174,7 @@ function mountStudio(
   const pad = fitted.centerline(1);
   pad.y = sampleHeight(pad.x, pad.z);
   const span = Math.max(box.getSize(new THREE.Vector3()).x, 400);
-  addHorizonSkirt(root, sampleHeight, level.id, span * 0.5);
+  addGroundFill(scene, box.min.y);
   addEnvironmentScatter(root, level, sampleHeight, pad, span);
   smoothTerrainShading(root);
   return {
@@ -170,8 +196,21 @@ function mountStudio(
           mats.forEach((m) => m.dispose());
         }
       });
+      purgeTerrainFromScene(scene);
     },
   };
+}
+
+function fitStudioRoot(root: THREE.Group): void {
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  root.position.x -= center.x;
+  root.position.z -= center.z;
+  if (size.x > 0 && size.x < 200) root.scale.multiplyScalar(560 / size.x);
+  else if (size.x > 1400) root.scale.multiplyScalar(640 / size.x);
+  root.updateMatrixWorld(true);
 }
 
 function fitPathToBox(level: LevelDef, box: THREE.Box3): {
@@ -240,42 +279,26 @@ function pruneOrphanMeshes(root: THREE.Group): void {
   }
 }
 
-function addHorizonSkirt(
-  parent: THREE.Group,
-  sample: (x: number, z: number) => number,
-  biome: LevelId,
-  half: number,
-): void {
-  const inner = Math.max(40, half * 0.97);
-  const outer = Math.max(2200, half * 6);
-  const geo = new THREE.RingGeometry(inner, outer, 128, 18);
+function addGroundFill(scene: THREE.Scene, minY: number): void {
+  const geo = new THREE.PlaneGeometry(12000, 12000, 1, 1);
   geo.rotateX(-Math.PI / 2);
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const z = pos.getZ(i);
-    const r = Math.hypot(x, z) || 1;
-    const ang = Math.atan2(z, x);
-    const nx = x / r;
-    const nz = z / r;
-    const edgeY = sample(nx * half * 0.94, nz * half * 0.94);
-    const t = Math.max(0, Math.min(1, (r - inner) / (outer - inner)));
-    const ridge =
-      (1 - Math.abs(Math.sin(ang * 2.4 + 0.35))) * (1 - Math.abs(Math.sin(ang * 1.2))) * 28;
-    const n = Math.sin(x * 0.0024 + 0.7) * Math.cos(z * 0.0021) * 14;
-    const blend = t * t * (3 - 2 * t);
-    const floor = Math.max(6, edgeY * 0.22);
-    let y = edgeY * (1 - blend) + floor * blend + ridge * (1 - blend) * 0.35 + n * (1 - blend);
-    if (biome === 'coastal') y = edgeY * (1 - Math.pow(blend, 0.65)) + n * 0.08 * (1 - blend) - 4 * blend;
-    pos.setY(i, y);
-  }
   ensureUpNormals(geo);
-  const mesh = new THREE.Mesh(geo, createSplatMaterial(biome, outer * 1.15));
-  mesh.name = 'Horizon_Skirt';
+  const mesh = new THREE.Mesh(
+    geo,
+    new THREE.MeshStandardMaterial({
+      color: 0x2c3330,
+      roughness: 1,
+      metalness: 0,
+      fog: true,
+      depthWrite: true,
+    }),
+  );
+  mesh.name = 'Ground_Fill';
+  mesh.position.y = Math.min(minY - 8, -4);
   mesh.receiveShadow = true;
   mesh.castShadow = false;
   mesh.frustumCulled = false;
-  parent.add(mesh);
+  scene.add(mesh);
 }
 
 function mountProcedural(level: LevelDef, scene: THREE.Scene, sunDir: THREE.Vector3): TerrainWorld {
@@ -303,7 +326,7 @@ function mountProcedural(level: LevelDef, scene: THREE.Scene, sunDir: THREE.Vect
 
   const pad = pathFrame(level, 1, 0, 0);
   pad.y = biomeHeight(level, pad.x, pad.z);
-  addHorizonSkirt(group, (x, z) => biomeHeight(level, x, z), level.id, WORLD_SIZE * 0.5);
+  addGroundFill(scene, 0);
   addEnvironmentScatter(group, level, (x, z) => biomeHeight(level, x, z), pad, WORLD_SIZE);
   smoothTerrainShading(group);
   scene.add(group);
@@ -330,6 +353,7 @@ function mountProcedural(level: LevelDef, scene: THREE.Scene, sunDir: THREE.Vect
           mats.forEach((mat) => mat.dispose());
         }
       });
+      purgeTerrainFromScene(scene);
     },
   };
 }
