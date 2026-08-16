@@ -46,10 +46,15 @@ export function createGlider(): GliderVisual {
   const wing = new THREE.Mesh(
     geometry,
     new THREE.MeshStandardMaterial({
+      color: 0xe63946,
       vertexColors: true,
       side: THREE.DoubleSide,
-      roughness: 0.7,
+      roughness: 0.5,
       metalness: 0.1,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      fog: false,
       flatShading: false,
     }),
   );
@@ -63,9 +68,12 @@ export function createGlider(): GliderVisual {
   const lines = new THREE.LineSegments(
     lineGeo,
     new THREE.LineBasicMaterial({
-      color: 0x222222,
-      transparent: true,
-      opacity: 0.85,
+      color: 0x111111,
+      linewidth: 1,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      fog: false,
     }),
   );
   lines.frustumCulled = false;
@@ -81,9 +89,9 @@ export function createGlider(): GliderVisual {
 
 function panelColor(u: number, dest: number[]): void {
   const band = Math.floor(u * 6);
-  if (band === 0 || band === 5) dest.push(0.08, 0.16, 0.42);
-  else if (band === 1 || band === 4) dest.push(0.96, 0.97, 0.98);
-  else dest.push(0.86, 0.12, 0.14);
+  if (band === 0 || band === 5) dest.push(0.06, 0.09, 0.2);
+  else if (band === 1 || band === 4) dest.push(0.98, 0.55, 0.16);
+  else dest.push(0.902, 0.224, 0.275);
 }
 
 function airfoilAt(u: number, v: number, surface: 'top' | 'bot'): { x: number; y: number; z: number } {
@@ -174,20 +182,36 @@ function createAirfoil(): { geometry: THREE.BufferGeometry; binds: LineBind[] } 
 }
 
 function skin(color: number, rough = 0.65, metal = 0.06): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
+  return new THREE.MeshStandardMaterial({
+    color,
+    roughness: rough,
+    metalness: metal,
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+    fog: false,
+  });
 }
 
 function createPilot(): PilotRig {
   const group = new THREE.Group();
-  const jacket = skin(0x1a2a38, 0.7);
-  const pants = skin(0x16181c, 0.75);
+  const jacket = skin(0x222222, 0.72);
+  const pants = skin(0x1a1a1a, 0.76);
   const flesh = skin(0xc68642, 0.55);
 
   const podGeo = new THREE.SphereGeometry(0.34, 14, 12);
   podGeo.scale(0.78, 0.55, 1.55);
   const pod = new THREE.Mesh(
     podGeo,
-    new THREE.MeshStandardMaterial({ color: 0x12151a, roughness: 0.42, metalness: 0.18 }),
+    new THREE.MeshStandardMaterial({
+      color: 0x222222,
+      roughness: 0.48,
+      metalness: 0.12,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      fog: false,
+    }),
   );
   pod.position.set(0, 0.12, 0.28);
   pod.rotation.x = 0.18;
@@ -195,7 +219,15 @@ function createPilot(): PilotRig {
 
   const nose = new THREE.Mesh(
     new THREE.ConeGeometry(0.16, 0.42, 10),
-    new THREE.MeshStandardMaterial({ color: 0x101318, roughness: 0.4, metalness: 0.2 }),
+    new THREE.MeshStandardMaterial({
+      color: 0x1a1a1a,
+      roughness: 0.45,
+      metalness: 0.14,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      fog: false,
+    }),
   );
   nose.rotation.x = Math.PI / 2;
   nose.position.set(0, 0.06, 0.82);
@@ -214,18 +246,28 @@ function createPilot(): PilotRig {
   const headShell = new THREE.Group();
   const helmet = new THREE.Mesh(
     new THREE.SphereGeometry(0.125, 16, 12),
-    new THREE.MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.32, metalness: 0.08 }),
+    new THREE.MeshStandardMaterial({
+      color: 0x2a2a2e,
+      roughness: 0.38,
+      metalness: 0.16,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      fog: false,
+    }),
   );
   helmet.scale.set(1, 1.06, 1.1);
   helmet.castShadow = true;
   const visor = new THREE.Mesh(
     new THREE.SphereGeometry(0.108, 14, 10, 0, Math.PI * 2, 0.55, 1.05),
     new THREE.MeshStandardMaterial({
-      color: 0x071820,
+      color: 0xffaa00,
       roughness: 0.1,
       metalness: 0.9,
-      transparent: true,
-      opacity: 0.78,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      fog: false,
     }),
   );
   visor.position.set(0, 0.0, 0.028);

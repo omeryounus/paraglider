@@ -52,12 +52,12 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
+renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.getElementById('app')?.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 40000);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 4000);
 const composer = createComposer(renderer, scene, camera);
 const clock = new THREE.Clock();
 const raycaster = new THREE.Raycaster();
@@ -134,7 +134,7 @@ async function startLevel(id: LevelId): Promise<void> {
 
   level = getLevel(id);
   atmo = createAtmosphere(level, scene);
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1.0;
   terrain = await loadTerrain(level, scene, atmo.sunDir);
   course = buildCourse(level, terrain, scene);
   flight = createFlight();

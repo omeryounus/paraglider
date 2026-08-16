@@ -12,7 +12,7 @@ export function createComposer(
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   composer.addPass(
-    new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.32, 0.28, 0.85),
+    new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.35, 0.2, 0.92),
   );
   composer.addPass(new OutputPass());
   return composer;

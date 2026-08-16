@@ -1,0 +1,296 @@
+import * as THREE from 'three';
+import type { LevelId } from './types';
+import { getTerrainMaps } from './terrainTextures';
+
+export interface BiomeSplat {
+  grass: THREE.Vector3;
+  rock: THREE.Vector3;
+  scree: THREE.Vector3;
+  snow: THREE.Vector3;
+  snowHeight: number;
+  grassScale: number;
+  grassMax: number;
+  rockMin: number;
+  beachMin: number;
+  beachMax: number;
+  strata: number;
+}
+
+export const BIOME_SPLAT: Record<LevelId, BiomeSplat> = {
+  alpine: {
+    grass: new THREE.Vector3(0.28, 0.52, 0.16),
+    rock: new THREE.Vector3(0.4, 0.38, 0.36),
+    scree: new THREE.Vector3(0.46, 0.36, 0.22),
+    snow: new THREE.Vector3(0.8, 0.86, 0.92),
+    snowHeight: 350,
+    grassScale: 0.042,
+    grassMax: 30,
+    rockMin: 35,
+    beachMin: -999,
+    beachMax: -998,
+    strata: 0,
+  },
+  coastal: {
+    grass: new THREE.Vector3(0.14, 0.46, 0.13),
+    rock: new THREE.Vector3(0.16, 0.14, 0.14),
+    scree: new THREE.Vector3(0.78, 0.62, 0.32),
+    snow: new THREE.Vector3(0.82, 0.8, 0.76),
+    snowHeight: 520,
+    grassScale: 0.036,
+    grassMax: 30,
+    rockMin: 32,
+    beachMin: 0,
+    beachMax: 48,
+    strata: 0,
+  },
+  dune: {
+    grass: new THREE.Vector3(0.78, 0.5, 0.18),
+    rock: new THREE.Vector3(0.56, 0.18, 0.08),
+    scree: new THREE.Vector3(0.8, 0.54, 0.22),
+    snow: new THREE.Vector3(0.86, 0.74, 0.52),
+    snowHeight: 155,
+    grassScale: 0.034,
+    grassMax: 24,
+    rockMin: 28,
+    beachMin: -999,
+    beachMax: -998,
+    strata: 0.15,
+  },
+  ridge: {
+    grass: new THREE.Vector3(0.44, 0.36, 0.16),
+    rock: new THREE.Vector3(0.56, 0.3, 0.14),
+    scree: new THREE.Vector3(0.62, 0.44, 0.22),
+    snow: new THREE.Vector3(0.78, 0.72, 0.62),
+    snowHeight: 380,
+    grassScale: 0.038,
+    grassMax: 28,
+    rockMin: 33,
+    beachMin: -999,
+    beachMax: -998,
+    strata: 1,
+  },
+};
+
+const SPLAT_CHUNK = /* glsl */ `
+uniform sampler2D uGrass;
+uniform sampler2D uRock;
+uniform sampler2D uScree;
+uniform sampler2D uSnow;
+uniform sampler2D uGrassN;
+uniform sampler2D uRockN;
+uniform sampler2D uScreeN;
+uniform sampler2D uSnowN;
+uniform vec3 uGrassTint;
+uniform vec3 uRockTint;
+uniform vec3 uScreeTint;
+uniform vec3 uSnowTint;
+uniform float uSnowHeight;
+uniform float uTexScale;
+uniform float uGrassMax;
+uniform float uRockMin;
+uniform float uBeachMin;
+uniform float uBeachMax;
+uniform float uStrata;
+varying vec3 vWp;
+varying vec3 vWn;
+
+vec3 planar(sampler2D tex, vec3 p, float sc) {
+  vec3 a = texture2D(tex, p.xz * sc).rgb;
+  vec3 b = texture2D(tex, p.zx * sc * 0.37 + vec2(0.17, 0.09)).rgb;
+  return mix(a, b, 0.42);
+}
+
+vec3 triplanar(sampler2D tex, vec3 p, vec3 n, float sc) {
+  vec3 q = p + 0.32 * vec3(sin(p.y * 0.07), sin(p.z * 0.061), sin(p.x * 0.068));
+  vec3 an = pow(abs(n), vec3(4.0));
+  an /= (an.x + an.y + an.z + 1e-5);
+  vec3 x = texture2D(tex, q.zy * sc).rgb;
+  vec3 y = texture2D(tex, q.xz * sc).rgb;
+  vec3 z = texture2D(tex, q.xy * sc).rgb;
+  return x * an.x + y * an.y + z * an.z;
+}
+
+vec3 unpackN(vec3 c) {
+  return c * 2.0 - 1.0;
+}
+
+vec3 planarNormal(sampler2D tex, vec3 p, vec3 n, float sc) {
+  vec3 t = unpackN(texture2D(tex, p.xz * sc).xyz);
+  vec3 wn = normalize(n);
+  vec3 wt = normalize(cross(wn, vec3(0.0, 0.0, 1.0)));
+  if (length(wt) < 0.1) wt = normalize(cross(wn, vec3(1.0, 0.0, 0.0)));
+  vec3 wb = cross(wn, wt);
+  return normalize(mix(wn, wt * t.x + wb * t.y + wn * t.z, 0.55));
+}
+
+vec3 triplanarNormal(sampler2D tex, vec3 p, vec3 n, float sc) {
+  vec3 an = pow(abs(n), vec3(4.0));
+  an /= (an.x + an.y + an.z + 1e-5);
+  vec3 tx = unpackN(texture2D(tex, p.zy * sc).xyz);
+  vec3 ty = unpackN(texture2D(tex, p.xz * sc).xyz);
+  vec3 tz = unpackN(texture2D(tex, p.xy * sc).xyz);
+  vec3 nx = vec3(tx.xy + n.zy, abs(tx.z) * n.x);
+  vec3 ny = vec3(ty.xy + n.xz, abs(ty.z) * n.y);
+  vec3 nz = vec3(tz.xy + n.xy, abs(tz.z) * n.z);
+  return normalize(nx.zyx * an.x + ny.xzy * an.y + nz.xyz * an.z);
+}
+
+vec4 splatWeights(vec3 wn, float h) {
+  float slopeDeg = degrees(acos(clamp(wn.y, 0.0, 1.0)));
+  float grassW = 1.0 - smoothstep(uGrassMax - 6.0, uGrassMax + 4.0, slopeDeg);
+  grassW *= 1.0 - smoothstep(uSnowHeight - 160.0, uSnowHeight - 25.0, h);
+  float rockW = smoothstep(uRockMin - 5.0, uRockMin + 6.0, slopeDeg);
+  float snowW = smoothstep(uSnowHeight - 45.0, uSnowHeight + 22.0, h);
+  snowW *= mix(1.0, 0.5, rockW);
+  float beachW = (1.0 - smoothstep(uBeachMin, uBeachMax, h)) * (1.0 - rockW);
+  grassW *= 1.0 - beachW;
+  float screeW = (1.0 - grassW) * (1.0 - rockW * 0.72) * (1.0 - snowW);
+  screeW = max(screeW, beachW);
+  vec4 w = vec4(grassW, rockW, screeW, snowW);
+  return w / (w.x + w.y + w.z + w.w + 1e-4);
+}
+
+vec3 strataTint(float h, vec3 p) {
+  float band = step(0.48, fract(h * 0.031 + sin(p.x * 0.018) * 0.1));
+  return mix(vec3(1.0), mix(vec3(0.82, 0.7, 0.48), vec3(1.2, 0.78, 0.5), band), uStrata);
+}
+
+vec3 splatAlbedo(vec4 w, vec3 wn) {
+  float sc = uTexScale;
+  float variegation = sin(vWp.x * 0.023) * sin(vWp.z * 0.019);
+  vec3 grass = planar(uGrass, vWp, sc) * uGrassTint * mix(vec3(0.9, 1.08, 0.85), vec3(1.08, 0.92, 0.7), variegation * 0.5 + 0.5);
+  vec3 rock = triplanar(uRock, vWp, wn, sc * 0.48) * uRockTint * strataTint(vWp.y, vWp);
+  vec3 scree = planar(uScree, vWp, sc * 1.05) * uScreeTint;
+  vec3 snow = planar(uSnow, vWp, sc * 0.58) * uSnowTint * vec3(0.94, 0.97, 1.04);
+  float spark = step(0.975, fract(sin(dot(vWp.xz, vec2(12.9898, 78.233))) * 43758.5453));
+  snow += spark * 0.16;
+  vec3 c = grass * w.x + rock * w.y + scree * w.z + snow * w.w;
+  float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = mix(vec3(luma), c, 1.38);
+  c *= 0.7 + 0.3 * pow(clamp(wn.y, 0.0, 1.0), 0.65);
+  return c;
+}
+
+vec3 splatWorldNormal(vec4 w, vec3 wn) {
+  float sc = uTexScale;
+  vec3 ng = planarNormal(uGrassN, vWp, wn, sc);
+  vec3 nr = triplanarNormal(uRockN, vWp, wn, sc * 0.52);
+  vec3 ns = planarNormal(uScreeN, vWp, wn, sc * 1.12);
+  vec3 nw = planarNormal(uSnowN, vWp, wn, sc * 0.64);
+  return normalize(ng * w.x + nr * w.y + ns * w.z + nw * w.w);
+}
+
+float splatRough(vec4 w) {
+  return w.x * 0.93 + w.y * 0.95 + w.z * 0.91 + w.w * 0.86;
+}
+`;
+
+function bindSplatUniforms(
+  shader: THREE.WebGLProgramParametersWithUniforms,
+  biome: LevelId,
+): void {
+  const maps = getTerrainMaps();
+  const pal = BIOME_SPLAT[biome];
+  shader.uniforms.uGrass = { value: maps.grass };
+  shader.uniforms.uRock = { value: maps.rock };
+  shader.uniforms.uScree = { value: maps.scree };
+  shader.uniforms.uSnow = { value: maps.snow };
+  shader.uniforms.uGrassN = { value: maps.grassN };
+  shader.uniforms.uRockN = { value: maps.rockN };
+  shader.uniforms.uScreeN = { value: maps.screeN };
+  shader.uniforms.uSnowN = { value: maps.snowN };
+  shader.uniforms.uGrassTint = { value: pal.grass };
+  shader.uniforms.uRockTint = { value: pal.rock };
+  shader.uniforms.uScreeTint = { value: pal.scree };
+  shader.uniforms.uSnowTint = { value: pal.snow };
+  shader.uniforms.uSnowHeight = { value: pal.snowHeight };
+  shader.uniforms.uTexScale = { value: pal.grassScale };
+  shader.uniforms.uGrassMax = { value: pal.grassMax };
+  shader.uniforms.uRockMin = { value: pal.rockMin };
+  shader.uniforms.uBeachMin = { value: pal.beachMin };
+  shader.uniforms.uBeachMax = { value: pal.beachMax };
+  shader.uniforms.uStrata = { value: pal.strata };
+}
+
+export function createSplatMaterial(biome: LevelId): THREE.MeshStandardMaterial {
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x5a6850,
+    roughness: 0.85,
+    metalness: 0.05,
+    vertexColors: false,
+    dithering: true,
+    fog: true,
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+    flatShading: false,
+  });
+  mat.onBeforeCompile = (shader) => {
+    bindSplatUniforms(shader, biome);
+    mat.userData.shader = shader;
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>\nvarying vec3 vWp;\nvarying vec3 vWn;`,
+      )
+      .replace(
+        '#include <defaultnormal_vertex>',
+        `#include <defaultnormal_vertex>\nvWn = normalize(mat3(modelMatrix) * objectNormal);`,
+      )
+      .replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${SPLAT_CHUNK}`)
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        vec4 tw = splatWeights(normalize(vWn), vWp.y);
+        diffuseColor.rgb = splatAlbedo(tw, normalize(vWn));`,
+      )
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        roughnessFactor = splatRough(tw);`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        normal = normalize(mat3(viewMatrix) * splatWorldNormal(tw, normalize(vWn)));`,
+      );
+  };
+  mat.customProgramCacheKey = () => `terrain-splat-v4-${biome}`;
+  return mat;
+}
+
+function isScatterOrFx(mesh: THREE.Mesh): boolean {
+  if ((mesh as THREE.InstancedMesh).isInstancedMesh) return true;
+  const n = mesh.name;
+  return (
+    n.startsWith('Scatter') ||
+    n === 'Water' ||
+    n.includes('Pad') ||
+    n.includes('Ring') ||
+    n.includes('Orb')
+  );
+}
+
+export function applyTerrainSplat(root: THREE.Object3D, biome: LevelId): void {
+  const splat = createSplatMaterial(biome);
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || isScatterOrFx(mesh)) return;
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    if (mesh.geometry) mesh.geometry.computeVertexNormals();
+    const prev = mesh.material;
+    mesh.material = splat;
+    if (prev && prev !== splat) {
+      const mats = Array.isArray(prev) ? prev : [prev];
+      mats.forEach((m) => m.dispose());
+    }
+  });
+}

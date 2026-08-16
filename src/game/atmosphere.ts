@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import type { LevelDef } from './types';
 
+const FOG_COLOR = 0x8cb8de;
+const SUN_OFFSET = new THREE.Vector3(300, 600, 200);
+
 export interface Atmosphere {
   sky: Sky;
   sun: THREE.DirectionalLight;
@@ -10,44 +13,49 @@ export interface Atmosphere {
   dispose: (scene: THREE.Scene) => void;
 }
 
-export function createAtmosphere(level: LevelDef, scene: THREE.Scene): Atmosphere {
+export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphere {
   const sky = new Sky();
   sky.name = 'SkyDome';
-  sky.scale.setScalar(12000);
-  sky.material.fog = false;
+  sky.scale.setScalar(3600);
+  const skyMat = sky.material as THREE.ShaderMaterial;
+  skyMat.fog = false;
+  skyMat.toneMapped = false;
+  skyMat.fragmentShader = skyMat.fragmentShader
+    .replace('#include <tonemapping_fragment>', '')
+    .replace('#include <colorspace_fragment>', '')
+    .replace(
+      'gl_FragColor = vec4( retColor, 1.0 );',
+      'gl_FragColor = vec4( 1.0 - exp( -retColor * 0.16 ), 1.0 );',
+    );
+  skyMat.needsUpdate = true;
   scene.add(sky);
 
-  const sunDir = new THREE.Vector3();
-  const uniforms = sky.material.uniforms;
-  uniforms['turbidity'].value = Math.max(4, level.atmosphere.turbidity);
-  uniforms['rayleigh'].value = 2.2;
-  uniforms['mieCoefficient'].value = 0.005;
-  uniforms['mieDirectionalG'].value = 0.8;
-
-  const elevation = THREE.MathUtils.clamp(level.atmosphere.elevation, 15, 25);
-  const phi = THREE.MathUtils.degToRad(90 - elevation);
-  const theta = THREE.MathUtils.degToRad(level.atmosphere.azimuth);
-  sunDir.setFromSphericalCoords(1, phi, theta);
+  const sunDir = SUN_OFFSET.clone().normalize();
+  const uniforms = skyMat.uniforms;
+  uniforms['turbidity'].value = 2.4;
+  uniforms['rayleigh'].value = 1.05;
+  uniforms['mieCoefficient'].value = 0.0032;
+  uniforms['mieDirectionalG'].value = 0.72;
   uniforms['sunPosition'].value.copy(sunDir);
 
-  scene.fog = new THREE.FogExp2(0x9bc5e2, 0.0008);
-  scene.background = new THREE.Color(0x87c4e8);
+  scene.fog = new THREE.Fog(FOG_COLOR, 200, 2500);
+  scene.background = new THREE.Color(FOG_COLOR);
 
-  const hemi = new THREE.HemisphereLight(0x7ec0ee, 0x3a4f2e, 0.8);
+  const hemi = new THREE.HemisphereLight(0x90c4f8, 0x3e4732, 0.7);
   scene.add(hemi);
 
-  const sun = new THREE.DirectionalLight(0xffeedd, 2.5);
+  const sun = new THREE.DirectionalLight(0xfff3db, 2.4);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 4;
-  sun.shadow.camera.far = 520;
-  sun.shadow.camera.left = -90;
-  sun.shadow.camera.right = 90;
-  sun.shadow.camera.top = 90;
-  sun.shadow.camera.bottom = -90;
-  sun.shadow.bias = -0.00018;
-  sun.shadow.normalBias = 0.04;
-  sun.position.copy(sunDir).multiplyScalar(280);
+  sun.shadow.camera.far = 900;
+  sun.shadow.camera.left = -140;
+  sun.shadow.camera.right = 140;
+  sun.shadow.camera.top = 140;
+  sun.shadow.camera.bottom = -140;
+  sun.shadow.bias = -0.0003;
+  sun.shadow.normalBias = 0.05;
+  sun.position.copy(SUN_OFFSET);
   scene.add(sun);
   scene.add(sun.target);
   return {
@@ -65,6 +73,6 @@ export function createAtmosphere(level: LevelDef, scene: THREE.Scene): Atmospher
 
 export function trackSun(atmo: Atmosphere, focus: THREE.Vector3): void {
   atmo.sun.target.position.copy(focus);
-  atmo.sun.position.copy(focus).addScaledVector(atmo.sunDir, 280);
+  atmo.sun.position.copy(focus).add(SUN_OFFSET);
   atmo.sun.target.updateMatrixWorld();
 }
