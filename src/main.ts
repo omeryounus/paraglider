@@ -57,7 +57,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.getElementById('app')?.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 4000);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 2000000);
 const composer = createComposer(renderer, scene, camera);
 const clock = new THREE.Clock();
 const raycaster = new THREE.Raycaster();

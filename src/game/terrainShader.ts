@@ -91,6 +91,8 @@ uniform float uRockMin;
 uniform float uBeachMin;
 uniform float uBeachMax;
 uniform float uStrata;
+uniform float uSkirtInner;
+uniform vec3 uFogColor;
 varying vec3 vWp;
 varying vec3 vWn;
 
@@ -120,7 +122,7 @@ vec3 planarNormal(sampler2D tex, vec3 p, vec3 n, float sc) {
   vec3 wt = normalize(cross(wn, vec3(0.0, 0.0, 1.0)));
   if (length(wt) < 0.1) wt = normalize(cross(wn, vec3(1.0, 0.0, 0.0)));
   vec3 wb = cross(wn, wt);
-  return normalize(mix(wn, wt * t.x + wb * t.y + wn * t.z, 0.55));
+  return normalize(mix(wn, wt * t.x + wb * t.y + wn * t.z, 0.28));
 }
 
 vec3 triplanarNormal(sampler2D tex, vec3 p, vec3 n, float sc) {
@@ -166,15 +168,18 @@ vec3 splatAlbedo(vec4 w, vec3 wn) {
   snow += spark * 0.16;
   vec3 c = grass * w.x + rock * w.y + scree * w.z + snow * w.w;
   float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  c = mix(vec3(luma), c, 1.38);
-  c *= 0.7 + 0.3 * pow(clamp(wn.y, 0.0, 1.0), 0.65);
+  c = mix(vec3(luma), c, 1.28);
+  c *= 0.82 + 0.18 * pow(clamp(wn.y, 0.0, 1.0), 0.85);
+  float radial = max(abs(vWp.x), abs(vWp.z));
+  float rim = smoothstep(uSkirtInner * 0.8, uSkirtInner * 1.05, radial);
+  c = mix(c, uFogColor, rim * 0.88);
   return c;
 }
 
 vec3 splatWorldNormal(vec4 w, vec3 wn) {
   float sc = uTexScale;
   vec3 ng = planarNormal(uGrassN, vWp, wn, sc);
-  vec3 nr = triplanarNormal(uRockN, vWp, wn, sc * 0.52);
+  vec3 nr = normalize(mix(wn, triplanarNormal(uRockN, vWp, wn, sc * 0.52), 0.32));
   vec3 ns = planarNormal(uScreeN, vWp, wn, sc * 1.12);
   vec3 nw = planarNormal(uSnowN, vWp, wn, sc * 0.64);
   return normalize(ng * w.x + nr * w.y + ns * w.z + nw * w.w);
@@ -188,6 +193,7 @@ float splatRough(vec4 w) {
 function bindSplatUniforms(
   shader: THREE.WebGLProgramParametersWithUniforms,
   biome: LevelId,
+  extent: number,
 ): void {
   const maps = getTerrainMaps();
   const pal = BIOME_SPLAT[biome];
@@ -210,9 +216,11 @@ function bindSplatUniforms(
   shader.uniforms.uBeachMin = { value: pal.beachMin };
   shader.uniforms.uBeachMax = { value: pal.beachMax };
   shader.uniforms.uStrata = { value: pal.strata };
+  shader.uniforms.uSkirtInner = { value: extent * 0.5 };
+  shader.uniforms.uFogColor = { value: new THREE.Color(0xa8c8e8) };
 }
 
-export function createSplatMaterial(biome: LevelId): THREE.MeshStandardMaterial {
+export function createSplatMaterial(biome: LevelId, extent = 1600): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
     color: 0x5a6850,
     roughness: 0.85,
@@ -226,7 +234,7 @@ export function createSplatMaterial(biome: LevelId): THREE.MeshStandardMaterial 
     flatShading: false,
   });
   mat.onBeforeCompile = (shader) => {
-    bindSplatUniforms(shader, biome);
+    bindSplatUniforms(shader, biome, extent);
     mat.userData.shader = shader;
 
     shader.vertexShader = shader.vertexShader
@@ -262,8 +270,57 @@ export function createSplatMaterial(biome: LevelId): THREE.MeshStandardMaterial 
         normal = normalize(mat3(viewMatrix) * splatWorldNormal(tw, normalize(vWn)));`,
       );
   };
-  mat.customProgramCacheKey = () => `terrain-splat-v4-${biome}`;
+  mat.customProgramCacheKey = () => `terrain-splat-v5-${biome}`;
   return mat;
+}
+
+export function tessellateOnce(geo: THREE.BufferGeometry): THREE.BufferGeometry {
+  const pos = geo.attributes.position;
+  const idx = geo.getIndex();
+  if (!pos || !idx || idx.count > 240000) {
+    geo.computeVertexNormals();
+    return geo;
+  }
+  const keyOf = (a: number, b: number): number => {
+    const lo = a < b ? a : b;
+    const hi = a < b ? b : a;
+    return lo * 1000003 + hi;
+  };
+  const newPos: number[] = [];
+  for (let i = 0; i < pos.count; i++) {
+    newPos.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+  }
+  const midCache = new Map<number, number>();
+  let next = pos.count;
+  const midpoint = (a: number, b: number): number => {
+    const key = keyOf(a, b);
+    const cached = midCache.get(key);
+    if (cached !== undefined) return cached;
+    const m = next;
+    next += 1;
+    midCache.set(key, m);
+    newPos.push(
+      (newPos[a * 3] + newPos[b * 3]) * 0.5,
+      (newPos[a * 3 + 1] + newPos[b * 3 + 1]) * 0.5,
+      (newPos[a * 3 + 2] + newPos[b * 3 + 2]) * 0.5,
+    );
+    return m;
+  };
+  const newIdx: number[] = [];
+  for (let i = 0; i < idx.count; i += 3) {
+    const a = idx.getX(i);
+    const b = idx.getX(i + 1);
+    const c = idx.getX(i + 2);
+    const ab = midpoint(a, b);
+    const bc = midpoint(b, c);
+    const ca = midpoint(c, a);
+    newIdx.push(a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(newPos, 3));
+  out.setIndex(newIdx);
+  out.computeVertexNormals();
+  return out;
 }
 
 function isScatterOrFx(mesh: THREE.Mesh): boolean {
@@ -278,14 +335,38 @@ function isScatterOrFx(mesh: THREE.Mesh): boolean {
   );
 }
 
-export function applyTerrainSplat(root: THREE.Object3D, biome: LevelId): void {
-  const splat = createSplatMaterial(biome);
+export function smoothTerrainShading(root: THREE.Object3D): void {
+  root.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh || isScatterOrFx(mesh)) return;
+    if (mesh.geometry) mesh.geometry.computeVertexNormals();
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    mats.forEach((mat) => {
+      if (!mat) return;
+      const std = mat as THREE.MeshStandardMaterial;
+      if ('flatShading' in std) {
+        std.flatShading = false;
+        std.needsUpdate = true;
+      }
+    });
+  });
+}
+
+export function applyTerrainSplat(root: THREE.Object3D, biome: LevelId, extent = 480): void {
+  const splat = createSplatMaterial(biome, extent);
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh || isScatterOrFx(mesh)) return;
     mesh.castShadow = false;
     mesh.receiveShadow = true;
-    if (mesh.geometry) mesh.geometry.computeVertexNormals();
+    if (mesh.geometry) {
+      const next = tessellateOnce(mesh.geometry);
+      if (next !== mesh.geometry) {
+        mesh.geometry.dispose();
+        mesh.geometry = next;
+      }
+      mesh.geometry.computeVertexNormals();
+    }
     const prev = mesh.material;
     mesh.material = splat;
     if (prev && prev !== splat) {
