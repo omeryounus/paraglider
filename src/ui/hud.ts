@@ -57,6 +57,8 @@ export function fillBiomeSelect(hud: HudRefs, current: LevelId, onPick: (id: Lev
 
 export function setHudVisible(hud: HudRefs, visible: boolean): void {
   hud.root.hidden = !visible;
+  const rig = document.querySelector<HTMLElement>('#cam-rig');
+  if (rig) rig.hidden = !visible;
 }
 
 export function setTerrainSource(hud: HudRefs, studio: boolean, asset: string): void {

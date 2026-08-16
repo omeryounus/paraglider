@@ -36,7 +36,7 @@ const alpine: LevelDef = {
     drop: 132,
   },
   rings: [
-    { t: 0.06, lateral: 0, agl: 26, type: 'green', radius: 9 },
+    { t: 0.04, lateral: 0, agl: 16, type: 'green', radius: 11 },
     { t: 0.13, lateral: 4, agl: 24, type: 'green', radius: 8.5 },
     { t: 0.2, lateral: 0, agl: 22, type: 'boost', radius: 9 },
     { t: 0.28, lateral: -22, agl: 30, type: 'gold', radius: 7.2 },
@@ -102,7 +102,7 @@ const coastal: LevelDef = {
     drop: 74,
   },
   rings: [
-    { t: 0.07, lateral: 0, agl: 20, type: 'green', radius: 9.2 },
+    { t: 0.04, lateral: 0, agl: 15, type: 'green', radius: 11 },
     { t: 0.16, lateral: 8, agl: 16, type: 'green', radius: 8.8 },
     { t: 0.24, lateral: 0, agl: 14, type: 'boost', radius: 9 },
     { t: 0.33, lateral: -20, agl: 22, type: 'gold', radius: 7.4 },
@@ -162,7 +162,7 @@ const dune: LevelDef = {
     drop: 86,
   },
   rings: [
-    { t: 0.06, lateral: 0, agl: 24, type: 'green', radius: 10 },
+    { t: 0.04, lateral: 0, agl: 16, type: 'green', radius: 11 },
     { t: 0.14, lateral: 10, agl: 22, type: 'green', radius: 9.4 },
     { t: 0.23, lateral: 0, agl: 22, type: 'green', radius: 9.2 },
     { t: 0.32, lateral: -26, agl: 32, type: 'gold', radius: 7.6 },
@@ -229,7 +229,7 @@ const ridge: LevelDef = {
     drop: 128,
   },
   rings: [
-    { t: 0.05, lateral: 0, agl: 20, type: 'green', radius: 7.4 },
+    { t: 0.04, lateral: 0, agl: 15, type: 'green', radius: 10.5 },
     { t: 0.12, lateral: 3, agl: 18, type: 'green', radius: 7.2 },
     { t: 0.19, lateral: -4, agl: 18, type: 'green', radius: 7 },
     { t: 0.26, lateral: 0, agl: 16, type: 'boost', radius: 7.4 },

@@ -23,7 +23,7 @@ export const BIOME_SPLAT: Record<LevelId, BiomeSplat> = {
     scree: new THREE.Vector3(0.46, 0.36, 0.22),
     snow: new THREE.Vector3(0.8, 0.86, 0.92),
     snowHeight: 350,
-    grassScale: 0.042,
+    grassScale: 0.11,
     grassMax: 30,
     rockMin: 35,
     beachMin: -999,
@@ -36,7 +36,7 @@ export const BIOME_SPLAT: Record<LevelId, BiomeSplat> = {
     scree: new THREE.Vector3(0.78, 0.62, 0.32),
     snow: new THREE.Vector3(0.82, 0.8, 0.76),
     snowHeight: 520,
-    grassScale: 0.036,
+    grassScale: 0.1,
     grassMax: 30,
     rockMin: 32,
     beachMin: 0,
@@ -49,7 +49,7 @@ export const BIOME_SPLAT: Record<LevelId, BiomeSplat> = {
     scree: new THREE.Vector3(0.8, 0.54, 0.22),
     snow: new THREE.Vector3(0.86, 0.74, 0.52),
     snowHeight: 155,
-    grassScale: 0.034,
+    grassScale: 0.095,
     grassMax: 24,
     rockMin: 28,
     beachMin: -999,
@@ -62,7 +62,7 @@ export const BIOME_SPLAT: Record<LevelId, BiomeSplat> = {
     scree: new THREE.Vector3(0.62, 0.44, 0.22),
     snow: new THREE.Vector3(0.78, 0.72, 0.62),
     snowHeight: 380,
-    grassScale: 0.038,
+    grassScale: 0.1,
     grassMax: 28,
     rockMin: 33,
     beachMin: -999,
@@ -80,6 +80,7 @@ uniform sampler2D uGrassN;
 uniform sampler2D uRockN;
 uniform sampler2D uScreeN;
 uniform sampler2D uSnowN;
+uniform sampler2D uDetailN;
 uniform vec3 uGrassTint;
 uniform vec3 uRockTint;
 uniform vec3 uScreeTint;
@@ -122,7 +123,7 @@ vec3 planarNormal(sampler2D tex, vec3 p, vec3 n, float sc) {
   vec3 wt = normalize(cross(wn, vec3(0.0, 0.0, 1.0)));
   if (length(wt) < 0.1) wt = normalize(cross(wn, vec3(1.0, 0.0, 0.0)));
   vec3 wb = cross(wn, wt);
-  return normalize(mix(wn, wt * t.x + wb * t.y + wn * t.z, 0.28));
+  return normalize(mix(wn, wt * t.x + wb * t.y + wn * t.z, 0.72));
 }
 
 vec3 triplanarNormal(sampler2D tex, vec3 p, vec3 n, float sc) {
@@ -167,9 +168,11 @@ vec3 splatAlbedo(vec4 w, vec3 wn) {
   float spark = step(0.975, fract(sin(dot(vWp.xz, vec2(12.9898, 78.233))) * 43758.5453));
   snow += spark * 0.16;
   vec3 c = grass * w.x + rock * w.y + scree * w.z + snow * w.w;
+  vec3 grain = planar(uGrass, vWp, sc * 7.2);
+  c *= mix(vec3(1.0), grain * 1.15, 0.38);
   float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  c = mix(vec3(luma), c, 1.28);
-  c *= 0.82 + 0.18 * pow(clamp(wn.y, 0.0, 1.0), 0.85);
+  c = mix(vec3(luma), c, 1.34);
+  c *= 0.86 + 0.14 * pow(clamp(wn.y, 0.0, 1.0), 0.85);
   float radial = max(abs(vWp.x), abs(vWp.z));
   float rim = smoothstep(uSkirtInner * 0.8, uSkirtInner * 1.05, radial);
   c = mix(c, uFogColor, rim * 0.88);
@@ -179,14 +182,17 @@ vec3 splatAlbedo(vec4 w, vec3 wn) {
 vec3 splatWorldNormal(vec4 w, vec3 wn) {
   float sc = uTexScale;
   vec3 ng = planarNormal(uGrassN, vWp, wn, sc);
-  vec3 nr = normalize(mix(wn, triplanarNormal(uRockN, vWp, wn, sc * 0.52), 0.32));
+  vec3 nr = normalize(mix(wn, triplanarNormal(uRockN, vWp, wn, sc * 0.52), 0.7));
   vec3 ns = planarNormal(uScreeN, vWp, wn, sc * 1.12);
   vec3 nw = planarNormal(uSnowN, vWp, wn, sc * 0.64);
-  return normalize(ng * w.x + nr * w.y + ns * w.z + nw * w.w);
+  vec3 base = normalize(ng * w.x + nr * w.y + ns * w.z + nw * w.w);
+  vec3 detail = planarNormal(uDetailN, vWp, wn, 0.28);
+  return normalize(mix(base, detail, 0.55));
 }
 
 float splatRough(vec4 w) {
-  return w.x * 0.93 + w.y * 0.95 + w.z * 0.91 + w.w * 0.86;
+  float grain = planar(uDetailN, vWp, 0.28).r;
+  return clamp(w.x * 0.9 + w.y * 0.94 + w.z * 0.88 + w.w * 0.82 + (grain - 0.5) * 0.16, 0.62, 0.98);
 }
 `;
 
@@ -205,6 +211,7 @@ function bindSplatUniforms(
   shader.uniforms.uRockN = { value: maps.rockN };
   shader.uniforms.uScreeN = { value: maps.screeN };
   shader.uniforms.uSnowN = { value: maps.snowN };
+  shader.uniforms.uDetailN = { value: maps.detailN };
   shader.uniforms.uGrassTint = { value: pal.grass };
   shader.uniforms.uRockTint = { value: pal.rock };
   shader.uniforms.uScreeTint = { value: pal.scree };
@@ -221,9 +228,10 @@ function bindSplatUniforms(
 }
 
 export function createSplatMaterial(biome: LevelId, extent = 1600): THREE.MeshStandardMaterial {
+  const maps = getTerrainMaps();
   const mat = new THREE.MeshStandardMaterial({
     color: 0x5a6850,
-    roughness: 0.85,
+    roughness: 0.88,
     metalness: 0.05,
     vertexColors: false,
     dithering: true,
@@ -232,6 +240,8 @@ export function createSplatMaterial(biome: LevelId, extent = 1600): THREE.MeshSt
     opacity: 1,
     depthWrite: true,
     flatShading: false,
+    normalMap: maps.detailN,
+    normalScale: new THREE.Vector2(0.85, 0.85),
   });
   mat.onBeforeCompile = (shader) => {
     bindSplatUniforms(shader, biome, extent);
@@ -270,7 +280,7 @@ export function createSplatMaterial(biome: LevelId, extent = 1600): THREE.MeshSt
         normal = normalize(mat3(viewMatrix) * splatWorldNormal(tw, normalize(vWn)));`,
       );
   };
-  mat.customProgramCacheKey = () => `terrain-splat-v5-${biome}`;
+  mat.customProgramCacheKey = () => `terrain-splat-v6-${biome}`;
   return mat;
 }
 

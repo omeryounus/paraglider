@@ -32,6 +32,7 @@ export function buildCourse(level: LevelDef, terrain: TerrainWorld, scene: THREE
     group.add(ring.mesh);
     rings.push(ring);
   }
+  aimFirstRing(rings, level, terrain);
 
   const thermals = level.thermals.map((spec) => {
     const pos = place(level, terrain, spec.t, spec.lateral, 0);
@@ -67,6 +68,22 @@ export function buildCourse(level: LevelDef, terrain: TerrainWorld, scene: THREE
   return { rings, active: 0, thermals, hazards, orbs, pad, group };
 }
 
+function aimFirstRing(rings: CourseRing[], level: LevelDef, terrain: TerrainWorld): void {
+  const first = rings[0];
+  if (!first) return;
+  const spawn = spawnPoint(level, terrain);
+  const heading = spawnHeading(terrain);
+  const fwd = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+  const toFirst = first.position.clone().sub(spawn);
+  const ahead = toFirst.dot(fwd);
+  if (ahead > 28 && ahead < 85 && Math.abs(first.position.y - spawn.y) < 28) return;
+  const pos = spawn.clone().addScaledVector(fwd, 46);
+  pos.y = spawn.y - 5;
+  first.mesh.position.copy(pos);
+  first.position.copy(pos);
+  first.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), fwd);
+}
+
 function place(
   level: LevelDef,
   terrain: TerrainWorld,
@@ -89,12 +106,11 @@ function place(
 }
 
 export function spawnPoint(level: LevelDef, terrain: TerrainWorld): THREE.Vector3 {
-  const [sx, sy, sz] = level.spawn;
   const start = terrain.centerline(0);
-  const x = terrain.fromStudio ? sx : start.x;
-  const z = terrain.fromStudio ? sz : start.z;
+  const x = start.x;
+  const z = start.z;
   const ground = terrain.sampleHeight(x, z);
-  const y = terrain.fromStudio ? Math.max(sy, ground + 32) : ground + 52;
+  const y = Math.max(ground + 42, start.y, level.spawn[1] * 0.35);
   return new THREE.Vector3(x, y, z);
 }
 

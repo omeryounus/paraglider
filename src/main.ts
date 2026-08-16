@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CRASH_SINK, LANDING_AGL, MISS_TIME_PENALTY, NEAR_MISS_MAX } from './config/constants';
 import { getLevel, LEVELS } from './config/levels';
 import { createAtmosphere, type Atmosphere } from './game/atmosphere';
-import { snapCamera, stepCamera } from './game/camera';
+import { bindLookControls, resetLook, snapCamera, stepCamera, zoomLook } from './game/camera';
 import {
   buildCourse,
   insideHazard,
@@ -149,6 +149,7 @@ async function startLevel(id: LevelId): Promise<void> {
     spawn.y + 2.2,
     spawn.z - Math.cos(flight.heading) * 11.5,
   );
+  resetLook();
   snapCamera(spawn, flight.heading);
   fillBiomeSelect(hud, level.id, (next) => void startLevel(next));
   setTerrainSource(hud, terrain.fromStudio, level.asset);
@@ -286,9 +287,36 @@ function frame(): void {
   requestAnimationFrame(frame);
 }
 
+function bindCamRig(): void {
+  const zoomIn = document.querySelector<HTMLButtonElement>('#btn-zoom-in');
+  const zoomOut = document.querySelector<HTMLButtonElement>('#btn-zoom-out');
+  const reset = document.querySelector<HTMLButtonElement>('#btn-cam-reset');
+  const hold = (el: HTMLButtonElement | null, fn: () => void): void => {
+    if (!el) return;
+    let id = 0;
+    const start = (event: Event): void => {
+      event.preventDefault();
+      fn();
+      id = window.setInterval(fn, 90);
+    };
+    const stop = (): void => window.clearInterval(id);
+    el.addEventListener('pointerdown', start);
+    el.addEventListener('pointerup', stop);
+    el.addEventListener('pointerleave', stop);
+    el.addEventListener('pointercancel', stop);
+  };
+  hold(zoomIn, () => zoomLook(-1));
+  hold(zoomOut, () => zoomLook(1));
+  reset?.addEventListener('click', () => resetLook());
+}
+
 function boot(): void {
   input.bind();
   bindTouch(input.setTouch, input.toggleFpv);
+  bindCamRig();
+  bindLookControls(renderer.domElement, () =>
+    session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'results',
+  );
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -296,9 +324,15 @@ function boot(): void {
     resizeComposer(composer, renderer);
   });
   window.addEventListener('keydown', (event) => {
-    if (event.key.toLowerCase() === 'r' && (session.phase === 'flying' || session.phase === 'results')) {
+    const key = event.key.toLowerCase();
+    const live = session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'results';
+    if (key === 'r' && (session.phase === 'flying' || session.phase === 'results')) {
       void startLevel(level.id);
     }
+    if (!live) return;
+    if (key === '=' || key === '+') zoomLook(-1);
+    if (key === '-' || key === '_') zoomLook(1);
+    if (key === 'home' || key === '0') resetLook();
   });
   renderLevelSelect(menus, progress, (id) => void startLevel(id));
   showSelect(menus, true);

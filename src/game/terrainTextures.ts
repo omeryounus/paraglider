@@ -126,13 +126,14 @@ export interface TerrainMaps {
   rockN: THREE.Texture;
   screeN: THREE.Texture;
   snowN: THREE.Texture;
+  detailN: THREE.Texture;
 }
 
 let cached: TerrainMaps | null = null;
 
 export function getTerrainMaps(): TerrainMaps {
   if (cached) return cached;
-  const size = 256;
+  const size = 512;
   const grassH = (x: number, y: number) =>
     fbm(x * 0.08, y * 0.08) + fbm(x * 0.32, y * 0.34) * 0.42 + Math.abs(Math.sin(y * 0.55)) * 0.12;
   const rockH = (x: number, y: number) => {
@@ -179,10 +180,22 @@ export function getTerrainMaps(): TerrainMaps {
       const spark = hash(Math.floor(u * 96), Math.floor(v * 96)) > 0.93 ? 36 : 0;
       return [226 + n * 18 + rip + spark, 234 + n * 12 + rip * 0.5 + spark, 242 + n * 8 + spark];
     }),
-    grassN: makeNormal(size, grassH, 3.6),
-    rockN: makeNormal(size, rockH, 4.6),
-    screeN: makeNormal(size, screeH, 3.8),
-    snowN: makeNormal(size, snowH, 1.7),
+    grassN: makeNormal(size, grassH, 4.2),
+    rockN: makeNormal(size, rockH, 5.2),
+    screeN: makeNormal(size, screeH, 4.4),
+    snowN: makeNormal(size, snowH, 2.1),
+    detailN: createDetailNormalMap(),
   };
   return cached;
+}
+
+export function createDetailNormalMap(): THREE.CanvasTexture {
+  const size = 512;
+  const heightFn = (x: number, y: number) =>
+    fbm(x * 0.22, y * 0.22, 5) * 0.65 +
+    fbm(x * 0.7, y * 0.68, 3) * 0.35 +
+    hash(Math.floor(x * 0.9), Math.floor(y * 0.9)) * 0.18;
+  const tex = makeNormal(size, heightFn, 5.4);
+  tex.repeat.set(64, 64);
+  return tex;
 }

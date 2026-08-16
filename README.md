@@ -38,6 +38,9 @@ Stars are awarded from score thresholds. Best run is stored in `localStorage`.
 | **Steer / Bank** | `A` / `D` or `Left` / `Right` | Virtual Stick Left / Right |
 | **Boost Rush** | `Shift` | Boost Button |
 | **Toggle Camera (3rd / Cockpit)** | `V` | Cam Button |
+| **Look / Orbit** | Drag mouse | Drag |
+| **Zoom in / out** | Wheel, `+` / `-` | `+` / `−` buttons |
+| **Reset view** | `Home` / `0` | RESET button |
 | **Retry** | `R` | — |
 
 ## Terrain Studio maps

@@ -39,7 +39,7 @@ export function createRing(
     new THREE.MeshStandardMaterial({
       color,
       emissive: color,
-      emissiveIntensity: type === 'boost' ? 2.1 : 1.45,
+      emissiveIntensity: type === 'boost' ? 2.4 : 1.85,
       roughness: 0.28,
       metalness: 0.08,
     }),

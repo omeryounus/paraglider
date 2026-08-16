@@ -226,9 +226,39 @@ kbd {
 
 #countdown[hidden],
 #level-select[hidden],
-#hud[hidden] {
+#hud[hidden],
+#cam-rig[hidden] {
   display: none !important;
 }
+
+#cam-rig {
+  position: absolute;
+  right: 1rem;
+  bottom: 1.15rem;
+  z-index: 16;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+#cam-rig button {
+  min-width: 44px;
+  height: 42px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--glass);
+  color: var(--ink);
+  font: 700 1.05rem Outfit, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+#btn-cam-reset {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+}
+#cam-rig button:hover { border-color: var(--cyan); color: #fff; }
+#cam-rig button:active { transform: translateY(1px); }
 
 #countdown {
   position: absolute;
@@ -327,6 +357,7 @@ button.ghost { background: transparent; color: var(--ink); border: 1px solid var
 
 @media (pointer: coarse) {
   #touch { display: flex; }
+  #cam-rig { bottom: 7.4rem; }
 }
 @media (max-width: 720px) {
   #hud { width: calc(100vw - 1.2rem); }
