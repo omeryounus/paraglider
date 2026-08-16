@@ -1,0 +1,21 @@
+{
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/terrain.glb",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400" },
+        { "key": "Content-Type", "value": "model/gltf-binary" }
+      ]
+    },
+    {
+      "source": "/collision.glb",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400" },
+        { "key": "Content-Type", "value": "model/gltf-binary" }
+      ]
+    }
+  ]
+}

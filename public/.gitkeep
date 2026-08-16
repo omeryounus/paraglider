@@ -1,0 +1,3 @@
+# Place Terrain Studio exports here:
+#   terrain.glb      — required mesh (from https://terrains.zyfod.dev/)
+#   collision.glb    — optional dedicated collision mesh
