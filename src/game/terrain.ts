@@ -116,6 +116,8 @@ function mountStudio(
   const size = first.getSize(new THREE.Vector3());
   if (size.x > 0 && size.x < 90) root.scale.multiplyScalar(480 / size.x);
   root.updateMatrixWorld(true);
+  pruneOrphanMeshes(root);
+  root.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(root);
   const board = Math.max(box.getSize(new THREE.Vector3()).x, 400);
   applyTerrainSplat(root, level.id, board);
@@ -197,6 +199,47 @@ function fitPathToBox(level: LevelDef, box: THREE.Box3): {
   return { centerline, tangent };
 }
 
+function pruneOrphanMeshes(root: THREE.Group): void {
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (mesh.isMesh) meshes.push(mesh);
+  });
+  if (meshes.length === 0) return;
+  const ranked = meshes.map((mesh) => {
+    const box = new THREE.Box3().setFromObject(mesh);
+    const size = box.getSize(new THREE.Vector3());
+    const count = mesh.geometry?.getAttribute('position')?.count ?? 0;
+    return { mesh, box, size, count, volume: Math.max(size.x * size.y * size.z, 0) };
+  });
+  ranked.sort((a, b) => b.count - a.count);
+  const main = ranked[0];
+  const mainCenter = main.box.getCenter(new THREE.Vector3());
+  const mainSpan = Math.max(main.size.length(), 40);
+  for (const item of ranked) {
+    if (item.mesh === main.mesh) continue;
+    const name = item.mesh.name.toLowerCase();
+    const keepName =
+      name.includes('terrain') || name.includes('surface') || name.includes('board') || name.includes('ground');
+    if (keepName) continue;
+    const dropName =
+      name.includes('collision') ||
+      name.includes('proxy') ||
+      name.includes('bound') ||
+      name.includes('helper') ||
+      name.includes('box') ||
+      name.includes('debug') ||
+      name.includes('volume') ||
+      name.includes('locator');
+    const tiny = item.count < 64 || item.volume < main.volume * 0.004;
+    const far = mainCenter.distanceTo(item.box.getCenter(new THREE.Vector3())) > mainSpan * 0.65;
+    if (dropName || tiny || far) {
+      item.mesh.visible = false;
+      item.mesh.removeFromParent();
+    }
+  }
+}
+
 function addHorizonSkirt(
   parent: THREE.Group,
   sample: (x: number, z: number) => number,
@@ -215,23 +258,15 @@ function addHorizonSkirt(
     const ang = Math.atan2(z, x);
     const nx = x / r;
     const nz = z / r;
-    const edgeY = sample(nx * half * 0.88, nz * half * 0.88);
+    const edgeY = sample(nx * half * 0.94, nz * half * 0.94);
     const t = Math.max(0, Math.min(1, (r - inner) / (outer - inner)));
     const ridge =
-      (1 - Math.abs(Math.sin(ang * 3.2 + 0.4))) * (1 - Math.abs(Math.sin(ang * 1.6))) * 48;
-    const n =
-      Math.sin(x * 0.0032 + 0.7) * Math.cos(z * 0.0028) * 22 +
-      Math.sin(x * 0.008 + z * 0.007) * 10;
-    const band = Math.exp(-(((t - 0.22) / 0.28) * ((t - 0.22) / 0.28)));
-    const fade = 1 - t * t;
-    let y: number;
-    if (biome === 'coastal') {
-      y = edgeY * (1 - Math.pow(t, 0.5)) + n * 0.12 * fade - 8 * t;
-    } else if (biome === 'dune') {
-      y = edgeY * (1 - t * 0.75) + Math.abs(n) * 0.55 * fade + 4;
-    } else {
-      y = edgeY * (1 - t * 0.7) + ridge * band * fade + n * fade;
-    }
+      (1 - Math.abs(Math.sin(ang * 2.4 + 0.35))) * (1 - Math.abs(Math.sin(ang * 1.2))) * 28;
+    const n = Math.sin(x * 0.0024 + 0.7) * Math.cos(z * 0.0021) * 14;
+    const blend = t * t * (3 - 2 * t);
+    const floor = Math.max(6, edgeY * 0.22);
+    let y = edgeY * (1 - blend) + floor * blend + ridge * (1 - blend) * 0.35 + n * (1 - blend);
+    if (biome === 'coastal') y = edgeY * (1 - Math.pow(blend, 0.65)) + n * 0.08 * (1 - blend) - 4 * blend;
     pos.setY(i, y);
   }
   ensureUpNormals(geo);

@@ -9,6 +9,7 @@ export interface Atmosphere {
   sky: Sky;
   sun: THREE.DirectionalLight;
   hemi: THREE.HemisphereLight;
+  fill: THREE.AmbientLight;
   sunDir: THREE.Vector3;
   dispose: (scene: THREE.Scene) => void;
 }
@@ -47,10 +48,12 @@ export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphe
   scene.fog = new THREE.Fog(FOG_COLOR, 400, 3200);
   scene.background = new THREE.Color(FOG_COLOR);
 
-  const hemi = new THREE.HemisphereLight(0xb0d8fd, 0x6b6357, 1.2);
+  const hemi = new THREE.HemisphereLight(0xb0d8fd, 0x6b6357, 1.15);
   scene.add(hemi);
+  const fill = new THREE.AmbientLight(0x9ec4e6, 0.38);
+  scene.add(fill);
 
-  const sun = new THREE.DirectionalLight(0xfffaed, 2.6);
+  const sun = new THREE.DirectionalLight(0xfffaed, 2.15);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 4;
@@ -68,9 +71,10 @@ export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphe
     sky,
     sun,
     hemi,
+    fill,
     sunDir,
     dispose: (host) => {
-      host.remove(sky, sun, hemi, sun.target);
+      host.remove(sky, sun, hemi, fill, sun.target);
       sky.geometry.dispose();
       (sky.material as THREE.Material).dispose();
     },

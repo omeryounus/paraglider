@@ -33,7 +33,7 @@ import { updateWater } from './game/water';
 import type { FlightState, LevelDef, LevelId, Progress, ScoreState } from './game/types';
 import { createGlider, poseGlider } from './entities/glider';
 import { createThermalDust, spawnPopup, updatePopups, updateThermalDust, type Popup } from './entities/effects';
-import { createWaypointArrow, updateWaypointArrow } from './entities/waypointArrow';
+import { createWaypointArrow, paintWaypointHud, updateWaypointArrow } from './entities/waypointArrow';
 import { bindHud, fillBiomeSelect, paintHud, setHudVisible, setTerrainSource } from './ui/hud';
 import {
   bindMenus,
@@ -68,7 +68,8 @@ const wind = new THREE.Vector3();
 const glider = createGlider();
 scene.add(glider.root);
 const arrow = createWaypointArrow();
-scene.add(arrow);
+glider.root.add(arrow);
+const wayMark = document.querySelector<HTMLElement>('#way-mark')!;
 const dust = createThermalDust();
 scene.add(dust);
 
@@ -269,8 +270,10 @@ function tickPlay(dt: number): void {
 
   poseGlider(glider, flight, input.state.steer, clock.elapsedTime, dt);
   const nxt = nextRing(course);
-  updateWaypointArrow(arrow, pos, nxt ? nxt.position : course.pad.position);
+  const wayTarget = nxt ? nxt.position : course.pad.position;
+  updateWaypointArrow(arrow, pos, wayTarget);
   arrow.visible = !input.state.fpv;
+  paintWaypointHud(wayMark, camera, wayTarget, session.phase === 'flying' || session.phase === 'countdown');
   updateThermalDust(dust, course.thermals, clock.elapsedTime);
   updateWater(terrain.water, dt, atmo.sunDir);
   stepCamera(camera, atmo, pos, flight, dt, glider, input.state.fpv);

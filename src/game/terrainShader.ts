@@ -21,7 +21,7 @@ export const BIOME_SPLAT: Record<LevelId, BiomeSplat> = {
     grass: new THREE.Vector3(0.28, 0.52, 0.16),
     rock: new THREE.Vector3(0.4, 0.38, 0.36),
     scree: new THREE.Vector3(0.46, 0.36, 0.22),
-    snow: new THREE.Vector3(0.8, 0.86, 0.92),
+    snow: new THREE.Vector3(0.68, 0.74, 0.8),
     snowHeight: 350,
     grassScale: 0.11,
     grassMax: 30,
@@ -113,6 +113,11 @@ vec3 triplanar(sampler2D tex, vec3 p, vec3 n, float sc) {
   return x * an.x + y * an.y + z * an.z;
 }
 
+vec3 projectAlbedo(sampler2D tex, vec3 p, vec3 n, float sc) {
+  float steep = smoothstep(0.18, 0.46, 1.0 - clamp(n.y, 0.0, 1.0));
+  return mix(planar(tex, p, sc), triplanar(tex, p, n, sc), steep);
+}
+
 vec3 unpackN(vec3 c) {
   return c * 2.0 - 1.0;
 }
@@ -161,34 +166,39 @@ vec3 strataTint(float h, vec3 p) {
 vec3 splatAlbedo(vec4 w, vec3 wn) {
   float sc = uTexScale;
   float variegation = sin(vWp.x * 0.023) * sin(vWp.z * 0.019);
-  vec3 grass = planar(uGrass, vWp, sc) * uGrassTint * mix(vec3(0.9, 1.08, 0.85), vec3(1.08, 0.92, 0.7), variegation * 0.5 + 0.5);
+  vec3 grass = projectAlbedo(uGrass, vWp, wn, sc) * uGrassTint * mix(vec3(0.9, 1.08, 0.85), vec3(1.08, 0.92, 0.7), variegation * 0.5 + 0.5);
   vec3 rock = triplanar(uRock, vWp, wn, sc * 0.48) * uRockTint * strataTint(vWp.y, vWp);
-  vec3 scree = planar(uScree, vWp, sc * 1.05) * uScreeTint;
-  vec3 snow = planar(uSnow, vWp, sc * 0.58) * uSnowTint * vec3(0.94, 0.97, 1.04);
+  vec3 scree = projectAlbedo(uScree, vWp, wn, sc * 1.05) * uScreeTint;
+  vec3 snow = projectAlbedo(uSnow, vWp, wn, sc * 0.58) * uSnowTint * vec3(0.82, 0.88, 0.94);
   float spark = step(0.975, fract(sin(dot(vWp.xz, vec2(12.9898, 78.233))) * 43758.5453));
-  snow += spark * 0.16;
+  snow += spark * 0.08;
   vec3 c = grass * w.x + rock * w.y + scree * w.z + snow * w.w;
-  vec3 grain = planar(uGrass, vWp, sc * 4.2);
-  c *= mix(vec3(1.0), grain * 1.08, 0.2);
+  vec3 grain = projectAlbedo(uGrass, vWp, wn, sc * 4.2);
+  c *= mix(vec3(1.0), grain * 1.06, 0.16);
   float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  c = mix(vec3(luma), c, 1.34);
-  c *= 0.86 + 0.14 * pow(clamp(wn.y, 0.0, 1.0), 0.85);
+  c = mix(vec3(luma), c, 1.28);
+  c *= 0.9 + 0.1 * pow(clamp(wn.y, 0.0, 1.0), 0.85);
+  c = min(c, vec3(0.92));
   float radial = max(abs(vWp.x), abs(vWp.z));
-  float rim = smoothstep(uSkirtInner * 0.8, uSkirtInner * 1.05, radial);
-  c = mix(c, uFogColor, rim * 0.88);
+  float rim = smoothstep(uSkirtInner * 0.72, uSkirtInner * 1.08, radial);
+  c = mix(c, uFogColor, rim * 0.92);
   return c;
+}
+
+vec3 projectNormal(sampler2D tex, vec3 p, vec3 n, float sc) {
+  float steep = smoothstep(0.18, 0.46, 1.0 - clamp(n.y, 0.0, 1.0));
+  return normalize(mix(planarNormal(tex, p, n, sc), triplanarNormal(tex, p, n, sc), steep));
 }
 
 vec3 splatWorldNormal(vec4 w, vec3 wn) {
   float sc = uTexScale;
-  vec3 ng = planarNormal(uGrassN, vWp, wn, sc);
-  vec3 nr = normalize(mix(wn, triplanarNormal(uRockN, vWp, wn, sc * 0.52), 0.4));
-  vec3 ns = planarNormal(uScreeN, vWp, wn, sc * 1.12);
-  vec3 nw = planarNormal(uSnowN, vWp, wn, sc * 0.64);
+  vec3 ng = projectNormal(uGrassN, vWp, wn, sc);
+  vec3 nr = normalize(mix(wn, triplanarNormal(uRockN, vWp, wn, sc * 0.52), 0.45));
+  vec3 ns = projectNormal(uScreeN, vWp, wn, sc * 1.12);
+  vec3 nw = projectNormal(uSnowN, vWp, wn, sc * 0.64);
   vec3 base = normalize(ng * w.x + nr * w.y + ns * w.z + nw * w.w);
-  if (base.y < 0.0) base = -base;
-  vec3 detail = planarNormal(uDetailN, vWp, wn, 0.22);
-  return normalize(mix(base, detail, 0.22));
+  vec3 detail = projectNormal(uDetailN, vWp, wn, 0.22);
+  return normalize(mix(base, detail, 0.18));
 }
 
 float splatRough(vec4 w) {
@@ -281,7 +291,7 @@ export function createSplatMaterial(biome: LevelId, extent = 1600): THREE.MeshSt
         normal = normalize(mat3(viewMatrix) * splatWorldNormal(tw, normalize(vWn)));`,
       );
   };
-  mat.customProgramCacheKey = () => `terrain-splat-v7-${biome}`;
+  mat.customProgramCacheKey = () => `terrain-splat-v8-${biome}`;
   return mat;
 }
 
@@ -388,6 +398,8 @@ export function applyTerrainSplat(root: THREE.Object3D, biome: LevelId, extent =
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh || isScatterOrFx(mesh)) return;
+    const verts = mesh.geometry?.getAttribute('position')?.count ?? 0;
+    if (verts > 0 && verts < 48) return;
     mesh.castShadow = false;
     mesh.receiveShadow = true;
     if (mesh.geometry) {

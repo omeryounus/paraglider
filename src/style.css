@@ -274,6 +274,18 @@ kbd {
 }
 
 #popup-layer { position: absolute; inset: 0; pointer-events: none; z-index: 12; }
+#way-mark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 13;
+  pointer-events: none;
+  color: #ffe082;
+  font-size: 1.35rem;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+  filter: drop-shadow(0 0 6px rgba(255, 224, 130, 0.55));
+}
+#way-mark[hidden] { display: none !important; }
 .score-pop {
   position: absolute;
   left: 0;
