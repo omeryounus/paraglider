@@ -12,6 +12,12 @@ const fwd = new THREE.Vector3();
 const right = new THREE.Vector3();
 let lastHeading = 0;
 
+export function snapCamera(pos: THREE.Vector3, heading: number): void {
+  lastHeading = heading;
+  look.copy(pos).setY(pos.y + 1.85);
+  lookTarget.copy(look);
+}
+
 export function stepCamera(
   camera: THREE.PerspectiveCamera,
   atmo: Atmosphere,
@@ -50,8 +56,8 @@ export function stepCamera(
   camera.fov = damp(camera.fov, fov, 4, dt);
   camera.updateProjectionMatrix();
 
-  const back = 9.4 + Math.min(3.2, flight.agl * 0.01) - speedT * 0.5;
-  const lift = 2.55 + Math.min(1.2, flight.agl * 0.005) - flight.pitch * 0.35;
+  const back = 11.2 + Math.min(2.4, flight.agl * 0.008) - speedT * 0.4;
+  const lift = 2.15 + Math.min(0.8, flight.agl * 0.004) - flight.pitch * 0.25;
   ideal.copy(pos).addScaledVector(fwd, -back).addScaledVector(right, flight.bank * 1.1 + yawRate * 14);
   ideal.y += lift;
   const shake = (boost ? 0.12 : 0) + (flight.inDowndraft ? 0.22 : 0) + (flight.nearMiss ? 0.1 : 0);
@@ -60,7 +66,7 @@ export function stepCamera(
     ideal.y += (Math.random() - 0.5) * shake;
   }
   camera.position.lerp(ideal, 1 - Math.exp(-5 * dt));
-  lookTarget.copy(pos).addScaledVector(fwd, 4.8).setY(pos.y + 1.55);
+  lookTarget.copy(pos).addScaledVector(fwd, 3.4).setY(pos.y + 1.85);
   look.lerp(lookTarget, 1 - Math.exp(-6.2 * dt));
   camera.lookAt(look);
   trackSun(atmo, pos);

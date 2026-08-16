@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CRASH_SINK, LANDING_AGL, MISS_TIME_PENALTY, NEAR_MISS_MAX } from './config/constants';
 import { getLevel, LEVELS } from './config/levels';
 import { createAtmosphere, type Atmosphere } from './game/atmosphere';
-import { stepCamera } from './game/camera';
+import { snapCamera, stepCamera } from './game/camera';
 import {
   buildCourse,
   insideHazard,
@@ -52,12 +52,12 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.2;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.getElementById('app')?.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 20000);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 40000);
 const composer = createComposer(renderer, scene, camera);
 const clock = new THREE.Clock();
 const raycaster = new THREE.Raycaster();
@@ -134,7 +134,7 @@ async function startLevel(id: LevelId): Promise<void> {
 
   level = getLevel(id);
   atmo = createAtmosphere(level, scene);
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.2;
   terrain = await loadTerrain(level, scene, atmo.sunDir);
   course = buildCourse(level, terrain, scene);
   flight = createFlight();
@@ -145,10 +145,11 @@ async function startLevel(id: LevelId): Promise<void> {
   flight.asl = spawn.y;
   flight.heading = spawnHeading(terrain);
   camera.position.set(
-    spawn.x - Math.sin(flight.heading) * 10,
-    spawn.y + 2.8,
-    spawn.z - Math.cos(flight.heading) * 10,
+    spawn.x - Math.sin(flight.heading) * 11.5,
+    spawn.y + 2.2,
+    spawn.z - Math.cos(flight.heading) * 11.5,
   );
+  snapCamera(spawn, flight.heading);
   fillBiomeSelect(hud, level.id, (next) => void startLevel(next));
   setLoader(menus, 'Ready', true);
   setHudVisible(hud, true);

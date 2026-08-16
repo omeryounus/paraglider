@@ -13,29 +13,30 @@ export interface Atmosphere {
 export function createAtmosphere(level: LevelDef, scene: THREE.Scene): Atmosphere {
   const sky = new Sky();
   sky.name = 'SkyDome';
-  sky.scale.setScalar(45000);
+  sky.scale.setScalar(12000);
+  sky.material.fog = false;
   scene.add(sky);
 
   const sunDir = new THREE.Vector3();
-  const { atmosphere: atm } = level;
   const uniforms = sky.material.uniforms;
-  uniforms['turbidity'].value = atm.turbidity;
-  uniforms['rayleigh'].value = atm.rayleigh;
-  uniforms['mieCoefficient'].value = atm.mieCoefficient;
-  uniforms['mieDirectionalG'].value = atm.mieDirectionalG;
+  uniforms['turbidity'].value = Math.max(4, level.atmosphere.turbidity);
+  uniforms['rayleigh'].value = 2.2;
+  uniforms['mieCoefficient'].value = 0.005;
+  uniforms['mieDirectionalG'].value = 0.8;
 
-  const phi = THREE.MathUtils.degToRad(90 - atm.elevation);
-  const theta = THREE.MathUtils.degToRad(atm.azimuth);
+  const elevation = THREE.MathUtils.clamp(level.atmosphere.elevation, 15, 25);
+  const phi = THREE.MathUtils.degToRad(90 - elevation);
+  const theta = THREE.MathUtils.degToRad(level.atmosphere.azimuth);
   sunDir.setFromSphericalCoords(1, phi, theta);
   uniforms['sunPosition'].value.copy(sunDir);
 
-  scene.fog = new THREE.FogExp2(level.fogColor, level.fog);
-  scene.background = new THREE.Color(level.fogColor);
+  scene.fog = new THREE.FogExp2(0x9bc5e2, 0.0008);
+  scene.background = new THREE.Color(0x87c4e8);
 
-  const hemi = new THREE.HemisphereLight(level.hemiSky, level.hemiGround, 0.42);
+  const hemi = new THREE.HemisphereLight(0x7ec0ee, 0x3a4f2e, 0.8);
   scene.add(hemi);
 
-  const sun = new THREE.DirectionalLight(level.sunColor, 2.15);
+  const sun = new THREE.DirectionalLight(0xffeedd, 2.5);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 4;

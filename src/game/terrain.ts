@@ -270,21 +270,21 @@ function mountProcedural(level: LevelDef, scene: THREE.Scene, sunDir: THREE.Vect
 
 function palette(level: LevelDef, a: THREE.Color, b: THREE.Color, c: THREE.Color): void {
   if (level.id === 'alpine') {
-    a.setHex(0x3f6d38);
-    b.setHex(0x6a7a4a);
-    c.setHex(0x8a8478);
+    a.setHex(0x2f8a38);
+    b.setHex(0x6f8a3a);
+    c.setHex(0x8d8674);
   } else if (level.id === 'coastal') {
-    a.setHex(0xd6c07a);
-    b.setHex(0x3f8a4e);
-    c.setHex(0x2f6a3a);
+    a.setHex(0xe8c86a);
+    b.setHex(0x2f9a48);
+    c.setHex(0x1f6a32);
   } else if (level.id === 'dune') {
-    a.setHex(0xc9a15b);
-    b.setHex(0xe0b56a);
-    c.setHex(0xa87a3a);
+    a.setHex(0xe2b25a);
+    b.setHex(0xf0c56a);
+    c.setHex(0xc48a32);
   } else {
-    a.setHex(0x6a6848);
-    b.setHex(0x8a7a5a);
-    c.setHex(0x5a5550);
+    a.setHex(0x7a8a48);
+    b.setHex(0xa09060);
+    c.setHex(0x6a6560);
   }
 }
 
