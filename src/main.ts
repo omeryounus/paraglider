@@ -145,9 +145,9 @@ async function startLevel(id: LevelId): Promise<void> {
   flight.asl = spawn.y;
   flight.heading = spawnHeading(terrain);
   camera.position.set(
-    spawn.x - Math.sin(flight.heading) * 20,
-    spawn.y + 10,
-    spawn.z - Math.cos(flight.heading) * 20,
+    spawn.x - Math.sin(flight.heading) * 10,
+    spawn.y + 2.8,
+    spawn.z - Math.cos(flight.heading) * 10,
   );
   fillBiomeSelect(hud, level.id, (next) => void startLevel(next));
   setLoader(menus, 'Ready', true);
@@ -264,12 +264,13 @@ function tickPlay(dt: number): void {
     if (flight.agl <= LANDING_AGL + 0.05) handleLanding();
   }
 
-  poseGlider(glider, flight.heading, flight.pitch, flight.bank, clock.elapsedTime);
+  poseGlider(glider, flight, input.state.steer, clock.elapsedTime, dt);
   const nxt = nextRing(course);
   updateWaypointArrow(arrow, pos, nxt ? nxt.position : course.pad.position);
+  arrow.visible = !input.state.fpv;
   updateThermalDust(dust, course.thermals, clock.elapsedTime);
   updateWater(terrain.water, dt, atmo.sunDir);
-  stepCamera(camera, atmo, pos, flight, dt);
+  stepCamera(camera, atmo, pos, flight, dt, glider, input.state.fpv);
   paintHud(hud, score, flight, session.timeLeft, score.ringsHit, course.rings.length);
   updatePopups(popups, camera, window.innerWidth, window.innerHeight, dt);
 }

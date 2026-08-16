@@ -4,6 +4,7 @@ export interface InputState {
   boost: boolean;
   flare: boolean;
   pause: boolean;
+  fpv: boolean;
 }
 
 export function createInput(): {
@@ -12,8 +13,8 @@ export function createInput(): {
   setTouch: (partial: Partial<InputState>) => void;
 } {
   const keys = new Set<string>();
-  const state: InputState = { dive: 0, steer: 0, boost: false, flare: false, pause: false };
-  const touch: InputState = { dive: 0, steer: 0, boost: false, flare: false, pause: false };
+  const state: InputState = { dive: 0, steer: 0, boost: false, flare: false, pause: false, fpv: false };
+  const touch: InputState = { dive: 0, steer: 0, boost: false, flare: false, pause: false, fpv: false };
 
   const sync = (): void => {
     const keyDive =
@@ -28,8 +29,10 @@ export function createInput(): {
 
   const bind = (): void => {
     window.addEventListener('keydown', (event) => {
-      keys.add(event.key.toLowerCase());
-      if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(event.key.toLowerCase())) {
+      const key = event.key.toLowerCase();
+      if (key === 'v' && !event.repeat) state.fpv = !state.fpv;
+      keys.add(key);
+      if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
         event.preventDefault();
       }
       sync();
