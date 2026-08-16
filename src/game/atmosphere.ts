@@ -47,7 +47,7 @@ export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphe
   scene.fog = new THREE.Fog(FOG_COLOR, 400, 3200);
   scene.background = new THREE.Color(FOG_COLOR);
 
-  const hemi = new THREE.HemisphereLight(0x87ceeb, 0x4a4235, 0.75);
+  const hemi = new THREE.HemisphereLight(0xb0d8fd, 0x6b6357, 1.2);
   scene.add(hemi);
 
   const sun = new THREE.DirectionalLight(0xfffaed, 2.6);

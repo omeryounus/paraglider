@@ -46,11 +46,12 @@ export function createGlider(): GliderVisual {
   const wing = new THREE.Mesh(
     geometry,
     new THREE.MeshStandardMaterial({
-      color: 0xe63946,
+      color: 0xd90429,
       vertexColors: true,
       side: THREE.DoubleSide,
-      roughness: 0.62,
-      metalness: 0.04,
+      shadowSide: THREE.DoubleSide,
+      roughness: 0.45,
+      metalness: 0.05,
       transparent: false,
       opacity: 1,
       depthWrite: true,
@@ -61,7 +62,6 @@ export function createGlider(): GliderVisual {
   );
   wing.castShadow = true;
   wing.receiveShadow = false;
-  wing.material.shadowSide = THREE.FrontSide;
   wing.userData.binds = binds;
   canopy.add(wing);
 
@@ -91,9 +91,9 @@ export function createGlider(): GliderVisual {
 
 function panelColor(u: number, dest: number[]): void {
   const band = Math.floor(u * 6);
-  if (band === 0 || band === 5) dest.push(0.06, 0.09, 0.2);
-  else if (band === 1 || band === 4) dest.push(0.98, 0.55, 0.16);
-  else dest.push(0.902, 0.224, 0.275);
+  if (band === 0 || band === 5) dest.push(0.12, 0.16, 0.38);
+  else if (band === 1 || band === 4) dest.push(1, 0.62, 0.18);
+  else dest.push(0.85, 0.03, 0.16);
 }
 
 function airfoilAt(u: number, v: number, surface: 'top' | 'bot'): { x: number; y: number; z: number } {
@@ -168,7 +168,7 @@ function createAirfoil(): { geometry: THREE.BufferGeometry; binds: LineBind[] } 
   geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geo.setIndex(indices);
-  refreshAirfoilNormals(geo, cols, rows);
+  geo.computeVertexNormals();
 
   const binds: LineBind[] = [];
   const rowsV = [0.16, 0.38, 0.6, 0.8];
@@ -399,44 +399,7 @@ function deformCanopy(
     pos.setXYZ(i, rx, y, rz);
   }
   pos.needsUpdate = true;
-  refreshAirfoilNormals(visual.wing.geometry, SEGS_X + 1, SEGS_Z + 1);
-}
-
-function refreshAirfoilNormals(geo: THREE.BufferGeometry, cols: number, rows: number): void {
-  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
-  let nrm = geo.getAttribute('normal') as THREE.BufferAttribute | undefined;
-  if (!nrm || nrm.count !== pos.count) {
-    nrm = new THREE.BufferAttribute(new Float32Array(pos.count * 3), 3);
-    geo.setAttribute('normal', nrm);
-  }
-  const sample = (i: number, dest: THREE.Vector3): THREE.Vector3 =>
-    dest.set(pos.getX(i), pos.getY(i), pos.getZ(i));
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-  const c = new THREE.Vector3();
-  const d = new THREE.Vector3();
-  const n = new THREE.Vector3();
-  const writeSheet = (off: number, flip: boolean): void => {
-    for (let j = 0; j < rows; j++) {
-      for (let i = 0; i < cols; i++) {
-        const i0 = off + j * cols + i;
-        const il = off + j * cols + Math.max(0, i - 1);
-        const ir = off + j * cols + Math.min(cols - 1, i + 1);
-        const jd = off + Math.max(0, j - 1) * cols + i;
-        const ju = off + Math.min(rows - 1, j + 1) * cols + i;
-        sample(ir, a).sub(sample(il, b));
-        sample(ju, c).sub(sample(jd, d));
-        n.crossVectors(a, c);
-        if (flip) n.negate();
-        if (n.lengthSq() < 1e-8) n.set(0, 1, 0);
-        else n.normalize();
-        nrm.setXYZ(i0, n.x, n.y, n.z);
-      }
-    }
-  };
-  writeSheet(0, false);
-  writeSheet(cols * rows, true);
-  nrm.needsUpdate = true;
+  visual.wing.geometry.computeVertexNormals();
 }
 
 function updateLines(visual: GliderVisual, pilot: PilotRig): void {

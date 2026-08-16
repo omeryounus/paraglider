@@ -96,6 +96,7 @@ function makeVertexHeightFn(
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh || (mesh as THREE.InstancedMesh).isInstancedMesh) return;
+    if (mesh.name === 'Horizon_Skirt' || mesh.name.startsWith('Scatter')) return;
     const pos = mesh.geometry?.attributes.position;
     if (!pos || pos.count < 64) return;
     mesh.updateWorldMatrix(true, false);
@@ -186,7 +187,7 @@ export function addEnvironmentScatter(
     const ang = slopeAt(height, x, z);
     if (ang >= treeSlopeMax) continue;
     const s = 0.85 + hash2(treesN, 4) * 1.35;
-    dummy.position.set(x, y, z);
+    dummy.position.set(x, y + 0.02, z);
     dummy.rotation.set(0, hash2(treesN, 8) * Math.PI * 2, 0);
     dummy.scale.setScalar(s);
     dummy.updateMatrix();
@@ -208,7 +209,7 @@ export function addEnvironmentScatter(
     const preferRidge = rocksN % 5 < 2;
     if (preferRidge && (ang < 0.12 || ang > 0.72)) continue;
     const s = 0.55 + hash2(rocksN, 6) * 1.85;
-    dummy.position.set(x, y + 0.12 * s, z);
+    dummy.position.set(x, y + 0.22 * s, z);
     dummy.rotation.set(hash2(rocksN, 1) * 0.7, hash2(rocksN, 2) * Math.PI * 2, hash2(rocksN, 3) * 0.55);
     dummy.scale.set(s, s * (0.58 + hash2(rocksN, 7) * 0.5), s);
     dummy.updateMatrix();

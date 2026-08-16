@@ -123,7 +123,7 @@ vec3 planarNormal(sampler2D tex, vec3 p, vec3 n, float sc) {
   vec3 wt = normalize(cross(wn, vec3(0.0, 0.0, 1.0)));
   if (length(wt) < 0.1) wt = normalize(cross(wn, vec3(1.0, 0.0, 0.0)));
   vec3 wb = cross(wn, wt);
-  return normalize(mix(wn, wt * t.x + wb * t.y + wn * t.z, 0.72));
+  return normalize(mix(wn, wt * t.x + wb * t.y + wn * t.z, 0.38));
 }
 
 vec3 triplanarNormal(sampler2D tex, vec3 p, vec3 n, float sc) {
@@ -154,7 +154,7 @@ vec4 splatWeights(vec3 wn, float h) {
 }
 
 vec3 strataTint(float h, vec3 p) {
-  float band = step(0.48, fract(h * 0.031 + sin(p.x * 0.018) * 0.1));
+  float band = smoothstep(0.42, 0.58, fract(h * 0.031 + sin(p.x * 0.018) * 0.1));
   return mix(vec3(1.0), mix(vec3(0.82, 0.7, 0.48), vec3(1.2, 0.78, 0.5), band), uStrata);
 }
 
@@ -168,8 +168,8 @@ vec3 splatAlbedo(vec4 w, vec3 wn) {
   float spark = step(0.975, fract(sin(dot(vWp.xz, vec2(12.9898, 78.233))) * 43758.5453));
   snow += spark * 0.16;
   vec3 c = grass * w.x + rock * w.y + scree * w.z + snow * w.w;
-  vec3 grain = planar(uGrass, vWp, sc * 7.2);
-  c *= mix(vec3(1.0), grain * 1.15, 0.38);
+  vec3 grain = planar(uGrass, vWp, sc * 4.2);
+  c *= mix(vec3(1.0), grain * 1.08, 0.2);
   float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c = mix(vec3(luma), c, 1.34);
   c *= 0.86 + 0.14 * pow(clamp(wn.y, 0.0, 1.0), 0.85);
@@ -182,12 +182,13 @@ vec3 splatAlbedo(vec4 w, vec3 wn) {
 vec3 splatWorldNormal(vec4 w, vec3 wn) {
   float sc = uTexScale;
   vec3 ng = planarNormal(uGrassN, vWp, wn, sc);
-  vec3 nr = normalize(mix(wn, triplanarNormal(uRockN, vWp, wn, sc * 0.52), 0.7));
+  vec3 nr = normalize(mix(wn, triplanarNormal(uRockN, vWp, wn, sc * 0.52), 0.4));
   vec3 ns = planarNormal(uScreeN, vWp, wn, sc * 1.12);
   vec3 nw = planarNormal(uSnowN, vWp, wn, sc * 0.64);
   vec3 base = normalize(ng * w.x + nr * w.y + ns * w.z + nw * w.w);
-  vec3 detail = planarNormal(uDetailN, vWp, wn, 0.28);
-  return normalize(mix(base, detail, 0.55));
+  if (base.y < 0.0) base = -base;
+  vec3 detail = planarNormal(uDetailN, vWp, wn, 0.22);
+  return normalize(mix(base, detail, 0.22));
 }
 
 float splatRough(vec4 w) {
@@ -280,8 +281,28 @@ export function createSplatMaterial(biome: LevelId, extent = 1600): THREE.MeshSt
         normal = normalize(mat3(viewMatrix) * splatWorldNormal(tw, normalize(vWn)));`,
       );
   };
-  mat.customProgramCacheKey = () => `terrain-splat-v6-${biome}`;
+  mat.customProgramCacheKey = () => `terrain-splat-v7-${biome}`;
   return mat;
+}
+
+export function ensureUpNormals(geo: THREE.BufferGeometry): void {
+  geo.computeVertexNormals();
+  const nrm = geo.getAttribute('normal');
+  if (!nrm || nrm.count === 0) return;
+  let sumY = 0;
+  for (let i = 0; i < nrm.count; i++) sumY += nrm.getY(i);
+  if (sumY / nrm.count >= 0) return;
+  const idx = geo.getIndex();
+  if (idx) {
+    for (let i = 0; i < idx.count; i += 3) {
+      const b = idx.getX(i + 1);
+      const c = idx.getX(i + 2);
+      idx.setX(i + 1, c);
+      idx.setX(i + 2, b);
+    }
+    idx.needsUpdate = true;
+  }
+  geo.computeVertexNormals();
 }
 
 export function tessellateOnce(geo: THREE.BufferGeometry): THREE.BufferGeometry {
@@ -349,7 +370,7 @@ export function smoothTerrainShading(root: THREE.Object3D): void {
   root.traverse((child) => {
     const mesh = child as THREE.Mesh;
     if (!mesh.isMesh || isScatterOrFx(mesh)) return;
-    if (mesh.geometry) mesh.geometry.computeVertexNormals();
+    if (mesh.geometry) ensureUpNormals(mesh.geometry);
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     mats.forEach((mat) => {
       if (!mat) return;
@@ -375,7 +396,7 @@ export function applyTerrainSplat(root: THREE.Object3D, biome: LevelId, extent =
         mesh.geometry.dispose();
         mesh.geometry = next;
       }
-      mesh.geometry.computeVertexNormals();
+      ensureUpNormals(mesh.geometry);
     }
     const prev = mesh.material;
     mesh.material = splat;

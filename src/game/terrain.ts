@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { WORLD_SIZE } from '../config/constants';
 import type { LevelDef, LevelId } from './types';
 import { fbm, valueNoise } from './math';
-import { applyTerrainSplat, createSplatMaterial, smoothTerrainShading } from './terrainShader';
+import { applyTerrainSplat, createSplatMaterial, ensureUpNormals, smoothTerrainShading } from './terrainShader';
 import { addEnvironmentScatter } from './scatter';
 import { createCoastalWater } from './water';
 import type { Water } from 'three/addons/objects/Water.js';
@@ -218,22 +218,23 @@ function addHorizonSkirt(
     const edgeY = sample(nx * half * 0.88, nz * half * 0.88);
     const t = Math.max(0, Math.min(1, (r - inner) / (outer - inner)));
     const ridge =
-      (1 - Math.abs(Math.sin(ang * 4.5 + 0.4))) * (1 - Math.abs(Math.sin(ang * 2.1))) * 110;
+      (1 - Math.abs(Math.sin(ang * 3.2 + 0.4))) * (1 - Math.abs(Math.sin(ang * 1.6))) * 48;
     const n =
-      Math.sin(x * 0.0041 + 0.7) * Math.cos(z * 0.0034) * 42 +
-      Math.sin(x * 0.011 + z * 0.009) * 16;
-    const band = Math.exp(-(((t - 0.18) / 0.16) * ((t - 0.18) / 0.16)));
+      Math.sin(x * 0.0032 + 0.7) * Math.cos(z * 0.0028) * 22 +
+      Math.sin(x * 0.008 + z * 0.007) * 10;
+    const band = Math.exp(-(((t - 0.22) / 0.28) * ((t - 0.22) / 0.28)));
+    const fade = 1 - t * t;
     let y: number;
     if (biome === 'coastal') {
-      y = edgeY * (1 - Math.pow(t, 0.55)) + n * 0.15 * (1 - t) - 6 * t;
+      y = edgeY * (1 - Math.pow(t, 0.5)) + n * 0.12 * fade - 8 * t;
     } else if (biome === 'dune') {
-      y = edgeY * (1 - t * 0.7) + Math.abs(n) * 0.8 * (1 - t) + 8;
+      y = edgeY * (1 - t * 0.75) + Math.abs(n) * 0.55 * fade + 4;
     } else {
-      y = edgeY * (1 - t * 0.65) + ridge * band + n * (1 - t) + 6;
+      y = edgeY * (1 - t * 0.7) + ridge * band * fade + n * fade;
     }
     pos.setY(i, y);
   }
-  geo.computeVertexNormals();
+  ensureUpNormals(geo);
   const mesh = new THREE.Mesh(geo, createSplatMaterial(biome, outer * 1.15));
   mesh.name = 'Horizon_Skirt';
   mesh.receiveShadow = true;
@@ -252,7 +253,7 @@ function mountProcedural(level: LevelDef, scene: THREE.Scene, sunDir: THREE.Vect
   for (let i = 0; i < pos.count; i++) {
     pos.setY(i, biomeHeight(level, pos.getX(i), pos.getZ(i)));
   }
-  geo.computeVertexNormals();
+  ensureUpNormals(geo);
   const mesh = new THREE.Mesh(geo, createSplatMaterial(level.id, WORLD_SIZE));
   mesh.name = 'Terrain_Surface';
   mesh.receiveShadow = true;
