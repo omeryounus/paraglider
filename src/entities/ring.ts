@@ -36,10 +36,12 @@ export function createRing(
 
   const torus = new THREE.Mesh(
     new THREE.TorusGeometry(radius, type === 'gold' ? 0.42 : 0.36, 10, 40),
-    new THREE.MeshBasicMaterial({
+    new THREE.MeshStandardMaterial({
       color,
-      transparent: true,
-      opacity: 0.92,
+      emissive: color,
+      emissiveIntensity: type === 'boost' ? 2.1 : 1.45,
+      roughness: 0.28,
+      metalness: 0.08,
     }),
   );
   const glow = new THREE.Mesh(
@@ -47,7 +49,7 @@ export function createRing(
     new THREE.MeshBasicMaterial({
       color,
       transparent: true,
-      opacity: 0.16,
+      opacity: 0.22,
       depthWrite: false,
       side: THREE.DoubleSide,
     }),
@@ -77,7 +79,7 @@ export function createRing(
 }
 
 export function updateRingVisual(ring: CourseRing, active: boolean, time: number): void {
-  const mat = ring.torus.material as THREE.MeshBasicMaterial;
+  const mat = ring.torus.material as THREE.MeshStandardMaterial;
   if (ring.collected) {
     ring.mesh.scale.setScalar(1.25 + Math.min(0.8, (time % 1) * 0.1));
     mat.opacity = 0.08;

@@ -18,20 +18,32 @@ export interface ZoneSpec {
   height?: number;
 }
 
+export interface AtmosphereConfig {
+  turbidity: number;
+  rayleigh: number;
+  mieCoefficient: number;
+  mieDirectionalG: number;
+  elevation: number;
+  azimuth: number;
+}
+
 export interface LevelDef {
   id: LevelId;
   name: string;
   subtitle: string;
   template: string;
+  asset: string;
   blurb: string;
   parTime: number;
   starScores: [number, number, number];
+  spawn: [number, number, number];
   fog: number;
   fogColor: number;
   sky: { top: number; horizon: number; bottom: number };
   sunColor: number;
   hemiSky: number;
   hemiGround: number;
+  atmosphere: AtmosphereConfig;
   water: boolean;
   waterLevel: number;
   path: {
@@ -61,6 +73,7 @@ export interface FlightState {
   flare: boolean;
   speedBoost: number;
   agl: number;
+  asl: number;
   nearMiss: boolean;
   inThermal: boolean;
   inDowndraft: boolean;

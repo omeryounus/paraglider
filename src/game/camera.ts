@@ -1,27 +1,27 @@
 import * as THREE from 'three';
 import { damp } from './math';
 import type { FlightState } from './types';
+import { trackSun, type Atmosphere } from './atmosphere';
 
 const ideal = new THREE.Vector3();
 const look = new THREE.Vector3();
 const lookTarget = new THREE.Vector3();
-const sunOffset = new THREE.Vector3(150, 220, 80);
 
 export function stepCamera(
   camera: THREE.PerspectiveCamera,
-  sun: THREE.DirectionalLight,
+  atmo: Atmosphere,
   pos: THREE.Vector3,
   flight: FlightState,
   dt: number,
 ): { fov: number; shake: number } {
   const boost = flight.boosting || flight.speedBoost > 0;
-  const speedT = THREE.MathUtils.smoothstep(flight.speed, 20, 52);
-  const fov = 60 + speedT * 16 + (boost ? 8 : 0) + Math.max(0, flight.pitch) * 8;
+  const speedT = THREE.MathUtils.smoothstep(flight.speed, 12, 40);
+  const fov = 58 + speedT * 18 + (boost ? 10 : 0) + Math.max(0, flight.pitch) * 6;
   camera.fov = damp(camera.fov, fov, 4, dt);
   camera.updateProjectionMatrix();
 
-  const back = 15 - speedT * 1.6;
-  const lift = 5.6 - flight.pitch * 1.2;
+  const back = 16 + Math.min(10, flight.agl * 0.03) - speedT * 1.2;
+  const lift = 5.8 + Math.min(6, flight.agl * 0.012) - flight.pitch * 1.1;
   ideal.set(
     pos.x - Math.sin(flight.heading) * back + Math.sin(flight.heading + Math.PI / 2) * flight.bank * 1.8,
     pos.y + lift,
@@ -41,8 +41,6 @@ export function stepCamera(
   look.lerp(lookTarget, 1 - Math.exp(-5.2 * dt));
   camera.lookAt(look);
 
-  sun.target.position.copy(pos);
-  sun.position.copy(pos).add(sunOffset);
-  sun.target.updateMatrixWorld();
+  trackSun(atmo, pos);
   return { fov: camera.fov, shake };
 }

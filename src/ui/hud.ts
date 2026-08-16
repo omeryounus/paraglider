@@ -1,5 +1,6 @@
-import type { FlightState, ScoreState } from '../game/types';
+import type { FlightState, LevelId, ScoreState } from '../game/types';
 import { BOOST_MAX } from '../config/constants';
+import { LEVELS } from '../config/levels';
 import { formatTime } from '../game/math';
 
 export interface HudRefs {
@@ -9,11 +10,15 @@ export interface HudRefs {
   boost: HTMLElement;
   rings: HTMLElement;
   spd: HTMLElement;
-  alt: HTMLElement;
+  agl: HTMLElement;
+  asl: HTMLElement;
+  vario: HTMLElement;
+  glide: HTMLElement;
   time: HTMLElement;
   compass: HTMLElement;
   chip: HTMLElement;
   speedLines: HTMLElement;
+  biome: HTMLSelectElement;
 }
 
 export function bindHud(): HudRefs {
@@ -24,12 +29,28 @@ export function bindHud(): HudRefs {
     boost: must('#hud-boost'),
     rings: must('#hud-rings'),
     spd: must('#hud-spd'),
-    alt: must('#hud-alt'),
+    agl: must('#hud-agl'),
+    asl: must('#hud-asl'),
+    vario: must('#hud-vario'),
+    glide: must('#hud-glide'),
     time: must('#hud-time'),
     compass: must('#hud-compass'),
     chip: must('#hud-chip'),
     speedLines: must('#speed-lines'),
+    biome: must('#hud-biome') as HTMLSelectElement,
   };
+}
+
+export function fillBiomeSelect(hud: HudRefs, current: LevelId, onPick: (id: LevelId) => void): void {
+  hud.biome.replaceChildren();
+  for (const level of LEVELS) {
+    const opt = document.createElement('option');
+    opt.value = level.id;
+    opt.textContent = `${level.name} · ${level.template}`;
+    hud.biome.appendChild(opt);
+  }
+  hud.biome.value = current;
+  hud.biome.onchange = () => onPick(hud.biome.value as LevelId);
 }
 
 export function setHudVisible(hud: HudRefs, visible: boolean): void {
@@ -51,14 +72,21 @@ export function paintHud(
   hud.boost.parentElement?.classList.toggle('boosting', flight.boosting || flight.speedBoost > 0);
   hud.rings.textContent = `${ringsHit}/${ringsTotal}`;
   hud.spd.textContent = `${(flight.speed * 3.6).toFixed(0)}`;
-  hud.alt.textContent = `${Math.max(0, flight.agl).toFixed(0)}`;
+  hud.agl.textContent = `${Math.max(0, flight.agl).toFixed(0)}`;
+  hud.asl.textContent = `${Math.max(0, flight.asl).toFixed(0)}`;
+  const vari = flight.verticalSpeed;
+  hud.vario.textContent = `${vari >= 0 ? '+' : ''}${vari.toFixed(1)}`;
+  hud.vario.classList.toggle('lift', vari > 0.15);
+  hud.vario.classList.toggle('sink', vari < -0.15);
+  const liveGlide = vari < -0.05 ? flight.speed / Math.abs(vari) : 99;
+  hud.glide.textContent = liveGlide > 40 ? '∞' : liveGlide.toFixed(1);
   hud.time.textContent = formatTime(timeLeft);
   hud.time.classList.toggle('low', timeLeft < 12);
-  const deg = ((THREE_RAD2DEG * flight.heading) % 360 + 360) % 360;
+  const deg = ((180 / Math.PI) * flight.heading % 360 + 360) % 360;
   hud.compass.style.transform = `rotate(${-deg}deg)`;
 
   const tags: string[] = [];
-  if (flight.inThermal) tags.push('THERMAL ▲');
+  if (flight.inThermal) tags.push('THERMAL +3.5');
   if (flight.inDowndraft) tags.push('DOWNDRAFT');
   if (flight.nearMiss) tags.push('NEAR MISS');
   if (flight.speedBoost > 0) tags.push('SPEED ×2');
@@ -69,14 +97,12 @@ export function paintHud(
 
   const intensity = Math.max(
     0,
-    (flight.speed - 28) / 30,
+    (flight.speed - 16) / 22,
     flight.boosting ? 0.7 : 0,
-    flight.speedBoost > 0 ? 0.85 : 0,
+    flight.speedBoost > 0 ? 0.9 : 0,
   );
   hud.speedLines.style.opacity = String(Math.min(1, intensity));
 }
-
-const THREE_RAD2DEG = 180 / Math.PI;
 
 function must(sel: string): HTMLElement {
   const node = document.querySelector<HTMLElement>(sel);

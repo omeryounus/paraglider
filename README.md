@@ -33,24 +33,23 @@ Stars are awarded from score thresholds. Best run is stored in `localStorage`.
 
 | Input | Action |
 | --- | --- |
-| `W` / `↓` | Dive — trade height for speed |
-| `S` / `↑` | Pull up — convert speed into climb |
-| `A` `D` / arrows | Steer |
-| `Space` / `Shift` | Boost |
-| `F` / `Ctrl` | Flare |
+| `W` / `↓` | Dive — accelerate toward 22 m/s |
+| `S` / `↑` / `Space` | Flare — bleed to 6 m/s |
+| `A` `D` / arrows | Bank / yaw |
+| `Shift` | Boost (2×, drains meter) |
 | `R` | Retry |
 
 On touch devices a virtual stick plus Boost / Flare buttons appear.
 
 ## Terrain Studio maps
 
-Place exports here:
+Place Terrain Studio exports here:
 
 ```
-public/terrains/alpine.glb
-public/terrains/coastal.glb
-public/terrains/dune.glb
-public/terrains/ridge.glb
+public/terrains/mountain.glb
+public/terrains/island.glb
+public/terrains/desert.glb
+public/terrains/hybrid.glb
 ```
 
 Draco meshes are supported. The loader prefers a `Collision_Mesh` node, then `Terrain_Surface`. Tiny boards are auto-scaled. Without a file, the matching procedural biome is used.

@@ -22,8 +22,8 @@ export function createInput(): {
       keys.has('a') || keys.has('arrowleft') ? 1 : keys.has('d') || keys.has('arrowright') ? -1 : 0;
     state.dive = touch.dive !== 0 ? touch.dive : keyDive;
     state.steer = touch.steer !== 0 ? touch.steer : keySteer;
-    state.boost = touch.boost || keys.has(' ') || keys.has('shift');
-    state.flare = touch.flare || keys.has('f') || keys.has('control');
+    state.boost = touch.boost || keys.has('shift');
+    state.flare = touch.flare || keys.has(' ') || keys.has('f');
   };
 
   const bind = (): void => {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CRASH_SINK, LANDING_AGL, MISS_TIME_PENALTY, NEAR_MISS_MAX } from './config/constants';
 import { getLevel, LEVELS } from './config/levels';
+import { createAtmosphere, type Atmosphere } from './game/atmosphere';
 import { stepCamera } from './game/camera';
 import {
   buildCourse,
@@ -15,6 +16,7 @@ import {
 } from './game/course';
 import { createInput } from './game/input';
 import { createFlight, grantBoost, stepPhysics, triggerSpeedRing } from './game/physics';
+import { createComposer, resizeComposer } from './game/postfx';
 import {
   awardLanding,
   awardNearMiss,
@@ -26,12 +28,13 @@ import {
   tickCombo,
 } from './game/scoring';
 import { loadProgress, newSession, recordResult, type Session } from './game/state';
-import { createEnvironment, loadTerrain, type TerrainWorld } from './game/terrain';
+import { loadTerrain, type TerrainWorld } from './game/terrain';
+import { updateWater } from './game/water';
 import type { FlightState, LevelDef, LevelId, Progress, ScoreState } from './game/types';
 import { createGlider, poseGlider } from './entities/glider';
 import { createThermalDust, spawnPopup, updatePopups, updateThermalDust, type Popup } from './entities/effects';
 import { createWaypointArrow, updateWaypointArrow } from './entities/waypointArrow';
-import { bindHud, paintHud, setHudVisible } from './ui/hud';
+import { bindHud, fillBiomeSelect, paintHud, setHudVisible } from './ui/hud';
 import {
   bindMenus,
   hideResults,
@@ -49,12 +52,13 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.06;
+renderer.toneMappingExposure = 1.15;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.getElementById('app')?.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.2, 6000);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 20000);
+const composer = createComposer(renderer, scene, camera);
 const clock = new THREE.Clock();
 const raycaster = new THREE.Raycaster();
 const down = new THREE.Vector3(0, -1, 0);
@@ -81,15 +85,14 @@ let terrain: TerrainWorld | null = null;
 let course: Course | null = null;
 let flight: FlightState = createFlight();
 let score: ScoreState = emptyScore();
-let lights: { sun: THREE.DirectionalLight; hemi: THREE.HemisphereLight } | null = null;
-let envRoot: THREE.Object3D | null = null;
+let atmo: Atmosphere | null = null;
 
 const sampleGround = (origin: THREE.Vector3): number | null => {
   if (!terrain) return null;
   scratch.copy(origin);
-  scratch.y += 90;
+  scratch.y += 120;
   raycaster.set(scratch, down);
-  raycaster.far = 700;
+  raycaster.far = 900;
   const hit = raycaster.intersectObject(terrain.collision, true)[0];
   return hit ? hit.point.y : terrain.sampleHeight(origin.x, origin.z);
 };
@@ -116,16 +119,8 @@ function clearWorld(): void {
   terrain?.dispose();
   terrain = null;
   course = null;
-  if (lights) {
-    scene.remove(lights.sun, lights.hemi, lights.sun.target);
-    lights = null;
-  }
-  if (envRoot) {
-    scene.remove(envRoot);
-    envRoot = null;
-  }
-  const sky = scene.getObjectByName('SkyDome');
-  if (sky) scene.remove(sky);
+  atmo?.dispose(scene);
+  atmo = null;
   popups.splice(0).forEach((p) => p.el.remove());
 }
 
@@ -138,23 +133,33 @@ async function startLevel(id: LevelId): Promise<void> {
   clearWorld();
 
   level = getLevel(id);
-  lights = createEnvironment(level, scene);
-  envRoot = scene.getObjectByName('SkyDome') ?? null;
-  terrain = await loadTerrain(level, scene);
+  atmo = createAtmosphere(level, scene);
+  renderer.toneMappingExposure = 1.15;
+  terrain = await loadTerrain(level, scene, atmo.sunDir);
   course = buildCourse(level, terrain, scene);
   flight = createFlight();
   score = emptyScore();
   session = newSession(level.parTime);
   const spawn = spawnPoint(level, terrain);
   glider.root.position.copy(spawn);
+  flight.asl = spawn.y;
   flight.heading = spawnHeading(terrain);
   camera.position.set(
-    spawn.x - Math.sin(flight.heading) * 18,
-    spawn.y + 9,
-    spawn.z - Math.cos(flight.heading) * 18,
+    spawn.x - Math.sin(flight.heading) * 20,
+    spawn.y + 10,
+    spawn.z - Math.cos(flight.heading) * 20,
   );
+  fillBiomeSelect(hud, level.id, (next) => void startLevel(next));
   setLoader(menus, 'Ready', true);
   setHudVisible(hud, true);
+}
+
+function openMenu(): void {
+  session.phase = 'menu';
+  setHudVisible(hud, false);
+  hideResults(menus);
+  renderLevelSelect(menus, progress, (id) => void startLevel(id));
+  showSelect(menus, true);
 }
 
 function finish(kind: 'clear' | 'crash' | 'timeout'): void {
@@ -174,13 +179,7 @@ function finish(kind: 'clear' | 'crash' | 'timeout'): void {
       const idx = LEVELS.findIndex((item) => item.id === level.id);
       void startLevel(LEVELS[(idx + 1) % LEVELS.length].id);
     },
-    () => {
-      session.phase = 'menu';
-      setHudVisible(hud, false);
-      hideResults(menus);
-      renderLevelSelect(menus, progress, (id) => void startLevel(id));
-      showSelect(menus, true);
-    },
+    openMenu,
   );
 }
 
@@ -191,7 +190,14 @@ function handleLanding(): void {
   const gentle = Math.abs(flight.verticalSpeed) < CRASH_SINK;
   if (band && gentle) {
     awardLanding(score, band, soft);
-    popups.push(spawnPopup(popupHost, glider.root.position.clone(), soft ? 'FLARE ×2' : band.toUpperCase(), '#ffc14a'));
+    popups.push(
+      spawnPopup(
+        popupHost,
+        glider.root.position.clone(),
+        soft ? 'FLARE ×2' : band.toUpperCase(),
+        '#ffc14a',
+      ),
+    );
     finish('clear');
     return;
   }
@@ -199,7 +205,7 @@ function handleLanding(): void {
 }
 
 function tickPlay(dt: number): void {
-  if (!terrain || !course || !lights) return;
+  if (!terrain || !course || !atmo) return;
   const pos = glider.root.position;
 
   if (session.phase === 'countdown') {
@@ -262,7 +268,8 @@ function tickPlay(dt: number): void {
   const nxt = nextRing(course);
   updateWaypointArrow(arrow, pos, nxt ? nxt.position : course.pad.position);
   updateThermalDust(dust, course.thermals, clock.elapsedTime);
-  stepCamera(camera, lights.sun, pos, flight, dt);
+  updateWater(terrain.water, dt, atmo.sunDir);
+  stepCamera(camera, atmo, pos, flight, dt);
   paintHud(hud, score, flight, session.timeLeft, score.ringsHit, course.rings.length);
   updatePopups(popups, camera, window.innerWidth, window.innerHeight, dt);
 }
@@ -272,7 +279,7 @@ function frame(): void {
   if (session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'results') {
     tickPlay(dt);
   }
-  renderer.render(scene, camera);
+  composer.render();
   requestAnimationFrame(frame);
 }
 
@@ -283,6 +290,7 @@ function boot(): void {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    resizeComposer(composer, renderer);
   });
   window.addEventListener('keydown', (event) => {
     if (event.key.toLowerCase() === 'r' && (session.phase === 'flying' || session.phase === 'results')) {

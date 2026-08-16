@@ -4,11 +4,15 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { WORLD_SIZE } from '../config/constants';
 import type { LevelDef } from './types';
 import { fbm, hash2, valueNoise } from './math';
+import { applyTerrainPbr, createDetailNormal } from './materials';
+import { createCoastalWater } from './water';
+import type { Water } from 'three/addons/objects/Water.js';
 
 export interface TerrainWorld {
   root: THREE.Object3D;
   collision: THREE.Object3D;
   fromStudio: boolean;
+  water: Water | null;
   sampleHeight: (x: number, z: number) => number;
   centerline: (t: number) => THREE.Vector3;
   tangent: (t: number) => THREE.Vector3;
@@ -52,12 +56,16 @@ export function biomeHeight(level: LevelDef, x: number, z: number): number {
   const dist = Math.hypot(x - center.x, 0);
   const half = path.halfWidth;
   const n = fbm(x * 0.006, z * 0.006) * 7;
+  const waves =
+    Math.sin(x * 0.008) * Math.cos(z * 0.007) * 18 +
+    Math.sin(x * 0.019 + 1.7) * Math.cos(z * 0.015) * 9 +
+    n;
 
   if (level.id === 'alpine') {
     const mouth = tc < 0.08 ? 22 : 0;
     const walls = Math.pow(Math.max(0, dist - half - mouth), 1.28) * 0.2;
     const rim = Math.max(0, Math.abs(x) / (WORLD_SIZE * 0.5) - 0.78) ** 2 * 70;
-    return Math.max(6, center.floor + walls + n + rim);
+    return Math.max(6, center.floor + walls + waves * 0.35 + rim);
   }
   if (level.id === 'coastal') {
     const island = Math.exp(-((dist * 0.018) ** 2)) * 22;
@@ -68,19 +76,24 @@ export function biomeHeight(level: LevelDef, x: number, z: number): number {
   if (level.id === 'dune') {
     const dunes = Math.sin(x * 0.018 + z * 0.01) * 10 + Math.sin(z * 0.025) * 6;
     const bowl = Math.pow(Math.max(0, dist - half * 1.4), 1.2) * 0.12;
-    return Math.max(8, center.floor * 0.55 + 28 + dunes + bowl + n);
+    return Math.max(8, center.floor * 0.55 + 28 + dunes + bowl + waves * 0.4);
   }
   const terrace = Math.floor((1 - tc) * 6) * 16;
   const walls = Math.pow(Math.max(0, dist - half), 1.45) * 0.38;
-  return Math.max(8, 36 + terrace + walls + n);
+  return Math.max(8, 36 + terrace + walls + waves * 0.3);
 }
 
-export async function loadTerrain(level: LevelDef, scene: THREE.Scene): Promise<TerrainWorld> {
-  const studio = await tryLoad(`/terrains/${level.id}.glb`);
+export async function loadTerrain(
+  level: LevelDef,
+  scene: THREE.Scene,
+  sunDir: THREE.Vector3,
+): Promise<TerrainWorld> {
+  const studio =
+    (await tryLoad(`/terrains/${level.asset}.glb`)) ?? (await tryLoad(`/terrains/${level.id}.glb`));
   if (studio) {
-    return mountStudio(studio, level, scene);
+    return mountStudio(studio, level, scene, sunDir);
   }
-  return mountProcedural(level, scene);
+  return mountProcedural(level, scene, sunDir);
 }
 
 async function tryLoad(url: string): Promise<THREE.Group | null> {
@@ -92,18 +105,24 @@ async function tryLoad(url: string): Promise<THREE.Group | null> {
   }
 }
 
-function mountStudio(root: THREE.Group, level: LevelDef, scene: THREE.Scene): TerrainWorld {
-  const box = new THREE.Box3().setFromObject(root);
-  const size = box.getSize(new THREE.Vector3());
+function mountStudio(
+  root: THREE.Group,
+  level: LevelDef,
+  scene: THREE.Scene,
+  sunDir: THREE.Vector3,
+): TerrainWorld {
+  const first = new THREE.Box3().setFromObject(root);
+  const size = first.getSize(new THREE.Vector3());
   if (size.x > 0 && size.x < 90) root.scale.multiplyScalar(480 / size.x);
   root.updateMatrixWorld(true);
-  root.traverse((obj) => {
-    const mesh = obj as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-  });
+  const box = new THREE.Box3().setFromObject(root);
+  applyTerrainPbr(root);
   scene.add(root);
+  let water: Water | null = null;
+  if (level.water) {
+    water = createCoastalWater(sunDir);
+    scene.add(water);
+  }
   const collision =
     root.getObjectByName('Collision_Mesh') ??
     root.getObjectByName('Terrain_Surface') ??
@@ -126,11 +145,13 @@ function mountStudio(root: THREE.Group, level: LevelDef, scene: THREE.Scene): Te
     root,
     collision,
     fromStudio: true,
+    water,
     sampleHeight,
     centerline: fitted.centerline,
     tangent: fitted.tangent,
     dispose: () => {
       scene.remove(root);
+      if (water) scene.remove(water);
       root.traverse((obj) => {
         const mesh = obj as THREE.Mesh;
         if (mesh.isMesh) {
@@ -168,7 +189,7 @@ function fitPathToBox(level: LevelDef, box: THREE.Box3): {
   return { centerline, tangent };
 }
 
-function mountProcedural(level: LevelDef, scene: THREE.Scene): TerrainWorld {
+function mountProcedural(level: LevelDef, scene: THREE.Scene, sunDir: THREE.Vector3): TerrainWorld {
   const group = new THREE.Group();
   group.name = `Biome_${level.id}`;
   const segments = level.id === 'ridge' ? 180 : 160;
@@ -196,30 +217,26 @@ function mountProcedural(level: LevelDef, scene: THREE.Scene): TerrainWorld {
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
+  const detail = createDetailNormal();
   const mesh = new THREE.Mesh(
     geo,
-    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93, metalness: 0.02 }),
+    new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.9,
+      metalness: 0.05,
+      normalMap: detail,
+      normalScale: new THREE.Vector2(0.55, 0.55),
+    }),
   );
   mesh.name = 'Terrain_Surface';
   mesh.receiveShadow = true;
   mesh.castShadow = true;
   group.add(mesh);
 
+  let water: Water | null = null;
   if (level.water) {
-    const water = new THREE.Mesh(
-      new THREE.CircleGeometry(WORLD_SIZE * 0.62, 64),
-      new THREE.MeshStandardMaterial({
-        color: 0x1b7b8c,
-        roughness: 0.14,
-        metalness: 0.45,
-        transparent: true,
-        opacity: 0.72,
-      }),
-    );
-    water.rotation.x = -Math.PI / 2;
-    water.position.y = level.waterLevel;
-    water.name = 'Water';
-    group.add(water);
+    water = createCoastalWater(sunDir);
+    scene.add(water);
   }
 
   addScatter(group, level);
@@ -229,6 +246,7 @@ function mountProcedural(level: LevelDef, scene: THREE.Scene): TerrainWorld {
     root: group,
     collision: mesh,
     fromStudio: false,
+    water,
     sampleHeight: (x, z) => biomeHeight(level, x, z),
     centerline: (t) => {
       const p = pathPoint(level, t);
@@ -237,6 +255,7 @@ function mountProcedural(level: LevelDef, scene: THREE.Scene): TerrainWorld {
     tangent: (t) => pathTangent(level, t),
     dispose: () => {
       scene.remove(group);
+      if (water) scene.remove(water);
       group.traverse((obj) => {
         const m = obj as THREE.Mesh;
         if (m.isMesh) {
@@ -251,9 +270,9 @@ function mountProcedural(level: LevelDef, scene: THREE.Scene): TerrainWorld {
 
 function palette(level: LevelDef, a: THREE.Color, b: THREE.Color, c: THREE.Color): void {
   if (level.id === 'alpine') {
-    a.setHex(0x4c7a3c);
-    b.setHex(0x6d7a48);
-    c.setHex(0x7a7568);
+    a.setHex(0x3f6d38);
+    b.setHex(0x6a7a4a);
+    c.setHex(0x8a8478);
   } else if (level.id === 'coastal') {
     a.setHex(0xd6c07a);
     b.setHex(0x3f8a4e);
@@ -314,61 +333,4 @@ function addScatter(parent: THREE.Group, level: LevelDef): void {
   trunks.count = placed;
   crowns.count = placed;
   parent.add(trunks, crowns);
-}
-
-export function createEnvironment(level: LevelDef, scene: THREE.Scene): {
-  sun: THREE.DirectionalLight;
-  hemi: THREE.HemisphereLight;
-} {
-  scene.fog = new THREE.FogExp2(level.fogColor, level.fog);
-  scene.background = new THREE.Color(level.sky.horizon);
-  const sky = new THREE.Mesh(
-    new THREE.SphereGeometry(2800, 28, 14),
-    new THREE.ShaderMaterial({
-      side: THREE.BackSide,
-      depthWrite: false,
-      uniforms: {
-        top: { value: new THREE.Color(level.sky.top) },
-        horizon: { value: new THREE.Color(level.sky.horizon) },
-        bottom: { value: new THREE.Color(level.sky.bottom) },
-      },
-      vertexShader: `
-        varying vec3 vPos;
-        void main() {
-          vPos = position;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        varying vec3 vPos;
-        uniform vec3 top;
-        uniform vec3 horizon;
-        uniform vec3 bottom;
-        void main() {
-          float h = normalize(vPos).y;
-          vec3 col = mix(horizon, top, smoothstep(0.0, 0.55, h));
-          col = mix(bottom, col, smoothstep(-0.25, 0.05, h));
-          gl_FragColor = vec4(col, 1.0);
-        }
-      `,
-    }),
-  );
-  sky.name = 'SkyDome';
-  scene.add(sky);
-
-  const hemi = new THREE.HemisphereLight(level.hemiSky, level.hemiGround, 0.74);
-  scene.add(hemi);
-  const sun = new THREE.DirectionalLight(level.sunColor, 1.5);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
-  sun.shadow.camera.near = 8;
-  sun.shadow.camera.far = 700;
-  sun.shadow.camera.left = -180;
-  sun.shadow.camera.right = 180;
-  sun.shadow.camera.top = 180;
-  sun.shadow.camera.bottom = -180;
-  sun.shadow.bias = -0.0003;
-  scene.add(sun);
-  scene.add(sun.target);
-  return { sun, hemi };
 }

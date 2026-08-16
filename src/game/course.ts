@@ -89,7 +89,13 @@ function place(
 }
 
 export function spawnPoint(level: LevelDef, terrain: TerrainWorld): THREE.Vector3 {
-  return place(level, terrain, 0.0, 0, 28);
+  const [sx, sy, sz] = level.spawn;
+  const start = terrain.centerline(0);
+  const x = terrain.fromStudio ? sx : start.x;
+  const z = terrain.fromStudio ? sz : start.z;
+  const ground = terrain.sampleHeight(x, z);
+  const y = terrain.fromStudio ? Math.max(sy, ground + 32) : ground + 52;
+  return new THREE.Vector3(x, y, z);
 }
 
 export function spawnHeading(terrain: TerrainWorld): number {

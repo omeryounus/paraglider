@@ -39,10 +39,9 @@
         <div id="level-grid"></div>
         <p class="help-keys">
           <kbd>W</kbd>/<kbd>↓</kbd> Dive
-          <kbd>S</kbd>/<kbd>↑</kbd> Climb
+          <kbd>S</kbd>/<kbd>↑</kbd>/<kbd>Space</kbd> Flare
           <kbd>A</kbd><kbd>D</kbd> Steer
-          <kbd>Space</kbd> Boost
-          <kbd>F</kbd> Flare
+          <kbd>Shift</kbd> Boost
         </p>
       </section>
 
@@ -65,11 +64,20 @@
         <div class="hud-row">
           <div><span class="dial-label">Rings</span><b id="hud-rings">0/0</b></div>
           <div><span class="dial-label">SPD</span><b id="hud-spd">000</b><small>km/h</small></div>
-          <div><span class="dial-label">AGL</span><b id="hud-alt">000</b><small>m</small></div>
+          <div><span class="dial-label">AGL</span><b id="hud-agl">000</b><small>m</small></div>
           <div class="compass-wrap">
             <div id="hud-compass">▲</div>
           </div>
         </div>
+        <div class="hud-row instruments">
+          <div><span class="dial-label">ASL</span><b id="hud-asl">000</b><small>m</small></div>
+          <div><span class="dial-label">Vario</span><b id="hud-vario">0.0</b><small>m/s</small></div>
+          <div><span class="dial-label">Glide</span><b id="hud-glide">9.0</b></div>
+        </div>
+        <label class="biome-select">
+          <span class="dial-label">Biome</span>
+          <select id="hud-biome"></select>
+        </label>
         <div id="hud-chip" hidden></div>
       </aside>
 

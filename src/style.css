@@ -190,6 +190,20 @@ kbd {
   place-items: center;
   color: var(--cyan);
 }
+.hud-row.instruments { grid-template-columns: 1fr 1fr 1fr; margin-top: 0.4rem; }
+#hud-vario.lift { color: var(--green); }
+#hud-vario.sink { color: var(--hot); }
+.biome-select { display: block; margin-top: 0.55rem; }
+.biome-select select {
+  width: 100%;
+  margin-top: 0.18rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(6, 10, 16, 0.7);
+  color: var(--ink);
+  padding: 0.28rem 0.4rem;
+  font: 500 0.78rem Outfit, system-ui, sans-serif;
+}
 #hud-chip {
   margin-top: 0.55rem;
   padding: 0.32rem 0.5rem;

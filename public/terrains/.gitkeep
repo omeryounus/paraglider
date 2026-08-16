@@ -1,5 +1,5 @@
-# Drop Terrain Studio GLBs here:
-#   alpine.glb   — Mountain Range
-#   coastal.glb  — Tropical Island
-#   dune.glb     — Desert
-#   ridge.glb    — Geological Hybrid
+# Terrain Studio GLBs (https://terrains.zyfod.dev/)
+#   mountain.glb  — Mountain Range
+#   island.glb    — Tropical Island
+#   desert.glb    — Desert Dunes
+#   hybrid.glb    — Geological Hybrid
