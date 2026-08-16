@@ -54,6 +54,11 @@ npm run build    # typecheck + production bundle
 npm run preview  # serve dist/
 ```
 
+## Live
+
+- App: [https://paraglider-six.vercel.app](https://paraglider-six.vercel.app)
+- Repo: [https://github.com/omeryounus/paraglider](https://github.com/omeryounus/paraglider)
+
 ## Vercel
 
 This is a standard Vite app. Connect the GitHub repo in the Vercel dashboard, or deploy from the CLI:
