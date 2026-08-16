@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "3D paragliding flight simulator — Vite + Three.js + TypeScript, Terrain Studio ready",
+  "description": "Aero Glide: Canyon Rush — arcade precision flight through Terrain Studio biomes",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

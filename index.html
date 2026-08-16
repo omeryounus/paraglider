@@ -2,112 +2,90 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
-      content="Paraglide — a 3D paragliding flight simulator. Load Terrain Studio landscapes and soar."
+      content="Aero Glide: Canyon Rush — arcade precision flight through Terrain Studio biomes."
     />
-    <title>Paraglide — Flight Simulator</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230b1520'/><path d='M8 28 Q32 8 56 28' fill='none' stroke='%23f07a3a' stroke-width='5' stroke-linecap='round'/><path d='M20 28 L32 48 L44 28' fill='none' stroke='%23e8e4dc' stroke-width='2.2'/></svg>" />
+    <title>Aero Glide: Canyon Rush</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23091016'/><path d='M8 30 Q32 8 56 30' fill='none' stroke='%233ce6ff' stroke-width='5' stroke-linecap='round'/><circle cx='32' cy='40' r='6' fill='%23ffc14a'/></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Outfit:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div id="app">
+      <div id="speed-lines"></div>
+
       <div id="loader">
         <div class="loader-wing"></div>
-        <p class="loader-title">PARAGLIDE</p>
-        <p id="loader-status">Preparing the valley…</p>
+        <p class="loader-title">AERO GLIDE</p>
+        <p id="loader-status">Spinning up the canyon…</p>
       </div>
 
-      <aside id="hud" hidden>
-        <div class="hud-brand">
-          <span class="hud-mark">PG</span>
-          <div>
-            <strong>PARAGLIDE</strong>
-            <small id="terrain-source">Procedural valley</small>
-          </div>
+      <section id="level-select" hidden>
+        <div class="select-head">
+          <p class="banner-kicker">Canyon Rush</p>
+          <h1>Pick a biome. Thread the line.</h1>
+          <p class="banner-hint">
+            Green rings keep the combo. Gold is the risky line. Cyan is raw speed.
+            Flare the bullseye.
+          </p>
         </div>
-
-        <div class="instruments">
-          <article class="dial">
-            <span class="dial-label">Altitude</span>
-            <span class="dial-value" id="hud-alt">000</span>
-            <span class="dial-unit">m AGL</span>
-          </article>
-          <article class="dial">
-            <span class="dial-label">Airspeed</span>
-            <span class="dial-value" id="hud-spd">000</span>
-            <span class="dial-unit">km/h</span>
-          </article>
-          <article class="dial" id="vario-dial">
-            <span class="dial-label">Variometer</span>
-            <span class="dial-value" id="hud-var">0.0</span>
-            <span class="dial-unit">m/s</span>
-            <div class="vario-track">
-              <div id="vario-needle"></div>
-            </div>
-          </article>
-          <article class="dial">
-            <span class="dial-label">Glide</span>
-            <span class="dial-value" id="hud-glide">9.0</span>
-            <span class="dial-unit">ratio</span>
-          </article>
-        </div>
-
-        <div id="thermal-chip" hidden>▲ Thermal lift +3.5 m/s</div>
-        <div class="hud-meta">
-          <span id="hud-hdg">HDG 000°</span>
-          <span id="hud-msl">MSL 000 m</span>
-        </div>
-      </aside>
-
-      <section id="banner">
-        <p class="banner-kicker">Ready for launch</p>
-        <h1>Find the lift. Land gentle.</h1>
-        <ul>
-          <li><kbd>W</kbd><kbd>S</kbd> / <kbd>↑</kbd><kbd>↓</kbd> Pitch</li>
-          <li><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd> Steer</li>
-          <li><kbd>Space</kbd> Flare / brake</li>
-          <li><kbd>R</kbd> Restart</li>
-        </ul>
-        <p class="banner-hint">
-          Three rising thermal columns mark lift. Pitch down to speed up,
-          flare before touchdown, and keep the wing level.
+        <div id="level-grid"></div>
+        <p class="help-keys">
+          <kbd>W</kbd>/<kbd>↓</kbd> Dive
+          <kbd>S</kbd>/<kbd>↑</kbd> Climb
+          <kbd>A</kbd><kbd>D</kbd> Steer
+          <kbd>Space</kbd> Boost
+          <kbd>F</kbd> Flare
         </p>
-        <button id="banner-go" type="button">Launch</button>
       </section>
 
-      <div id="modal" hidden>
-        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <p class="modal-kicker" id="modal-kicker">Flight complete</p>
-          <h2 id="modal-title">Safe Landing</h2>
-          <p id="modal-copy">You settled onto the slope with a gentle sink rate.</p>
-          <dl class="modal-stats">
-            <div>
-              <dt>Time</dt>
-              <dd id="stat-time">0:00</dd>
-            </div>
-            <div>
-              <dt>Distance</dt>
-              <dd id="stat-dist">0 m</dd>
-            </div>
-            <div>
-              <dt>Max AGL</dt>
-              <dd id="stat-max">0 m</dd>
-            </div>
-            <div>
-              <dt>Touchdown</dt>
-              <dd id="stat-td">0.0 m/s</dd>
-            </div>
-          </dl>
-          <button id="modal-restart" type="button">Fly again</button>
+      <aside id="hud" hidden>
+        <div class="hud-top">
+          <div class="score-block">
+            <span class="dial-label">Score</span>
+            <strong id="hud-score">0</strong>
+          </div>
+          <div class="combo-block" id="hud-combo">1×</div>
+          <div class="time-block">
+            <span class="dial-label">Time</span>
+            <strong id="hud-time">0:00.0</strong>
+          </div>
         </div>
+        <div class="boost-wrap">
+          <span class="dial-label">Boost</span>
+          <div class="boost-track"><div id="hud-boost"></div></div>
+        </div>
+        <div class="hud-row">
+          <div><span class="dial-label">Rings</span><b id="hud-rings">0/0</b></div>
+          <div><span class="dial-label">SPD</span><b id="hud-spd">000</b><small>km/h</small></div>
+          <div><span class="dial-label">AGL</span><b id="hud-alt">000</b><small>m</small></div>
+          <div class="compass-wrap">
+            <div id="hud-compass">▲</div>
+          </div>
+        </div>
+        <div id="hud-chip" hidden></div>
+      </aside>
+
+      <div id="countdown" hidden>3</div>
+      <div id="popup-layer"></div>
+
+      <div id="touch" class="touch-only">
+        <div id="stick"><div id="stick-knob"></div></div>
+        <div class="touch-actions">
+          <button type="button" id="btn-flare">FLARE</button>
+          <button type="button" id="btn-boost">BOOST</button>
+        </div>
+      </div>
+
+      <div id="results" hidden>
+        <div id="results-card" class="modal-card"></div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

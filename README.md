@@ -1,81 +1,76 @@
-# Paraglide
+# Aero Glide: Canyon Rush
 
-A single-scene 3D paragliding flight simulator built with **Vite**, **Three.js**, and **TypeScript**. It is ready to host on **Vercel** and designed to fly over landscapes exported from [Terrain Studio](https://terrains.zyfod.dev/).
+Arcade precision flight built with **Vite**, **Three.js**, and **TypeScript**. Dive mountain valleys, thread glowing rings, ride thermals, and nail bullseye landings. The four courses match Terrain Studio templates from [terrains.zyfod.dev](https://terrains.zyfod.dev/).
 
-The empty GitHub repo [omeryounus/paraglider](https://github.com/omeryounus/paraglider) is the project home. Until `public/terrain.glb` is present, the game generates a procedural alpine valley so you can fly immediately.
+- Live: [https://paraglider-six.vercel.app](https://paraglider-six.vercel.app)
+- Repo: [https://github.com/omeryounus/paraglider](https://github.com/omeryounus/paraglider)
 
-## Flight model
+Each biome plays immediately on a procedural stand-in. Drop a Studio GLB at `public/terrains/{mapId}.glb` to swap in a hand-authored landscape.
 
-- Constant forward motion along heading at a **12 m/s** base speed
-- **9:1 glide ratio** (`sink = -speed / 9`)
-- Pitch down increases airspeed and sink; pitch up / **flare** (Space) bleeds speed and shallows the descent
-- Roll banks the canopy visually and yaws the heading
-- Three cylindrical **thermals** add **+3.5 m/s** lift while you are inside them
-- Downward `Raycaster` vs the terrain mesh: AGL ≤ 1 m ends the flight
-  - Gentle sink (`|vy| < 2 m/s`) and a level wing → **Safe Landing**
-  - Steep sink or high bank → **Crash**
+## Courses
+
+| Level | Terrain Studio template | Flavor |
+| --- | --- | --- |
+| Alpine Slalom | Mountain Range | Tight canyon, speed-ring chains |
+| Coastal Run | Tropical Island | Water skimming, beach bullseye |
+| Dune Storm | Desert | Heavy thermals, wandering downdrafts |
+| Ridge Runner | Geological Hybrid | Terraced drops, gold-ring gaps |
+
+## Play loop
+
+- **Green rings** +500 and grow combo
+- **Gold rings** +1,500 and fill boost
+- **Cyan boost rings** +1,000 and a 2× speed surge
+- Miss a ring: combo dies and the clock loses 4 seconds
+- Thermals refill boost and launch you
+- Red downdrafts dump altitude unless you boost through
+- Near-miss skims award live points and charge boost
+- Bullseye landing 5,000 (2× if you flare under 1.5 m/s)
+
+Stars are awarded from score thresholds. Best run is stored in `localStorage`.
 
 ## Controls
 
 | Input | Action |
 | --- | --- |
-| `W` / `S` or `↑` / `↓` | Pitch |
-| `A` / `D` or `←` / `→` | Steer |
-| `Space` | Flare / brake |
-| `R` | Restart |
+| `W` / `↓` | Dive — trade height for speed |
+| `S` / `↑` | Pull up — convert speed into climb |
+| `A` `D` / arrows | Steer |
+| `Space` / `Shift` | Boost |
+| `F` / `Ctrl` | Flare |
+| `R` | Retry |
 
-## Load a Terrain Studio landscape
+On touch devices a virtual stick plus Boost / Flare buttons appear.
 
-1. Open [Terrain Studio](https://terrains.zyfod.dev/) and author a tile (or use a template).
-2. Export a **GLB** package. The **Three.js Viewer Assets** preset is the best match. Draco-compressed meshes are supported.
-3. Unzip the export and copy `terrain.glb` to `public/terrain.glb`.
-4. Optional: also copy `collision.glb` if the zip includes a dedicated collision mesh.
+## Terrain Studio maps
 
-The loader prefers, in order:
+Place exports here:
 
-1. `/collision.glb` if present
-2. A node named `Collision_Mesh` inside `terrain.glb`
-3. `Terrain_Surface` / `Terrain_Board`
-4. The rest of the GLB (water / skirt / slab nodes are skipped when a named surface exists)
+```
+public/terrains/alpine.glb
+public/terrains/coastal.glb
+public/terrains/dune.glb
+public/terrains/ridge.glb
+```
 
-Tiny exports are auto-scaled so the valley stays flyable. Shadows are enabled on every loaded mesh.
+Draco meshes are supported. The loader prefers a `Collision_Mesh` node, then `Terrain_Surface`. Tiny boards are auto-scaled. Without a file, the matching procedural biome is used.
 
-## Local development
+## Develop
 
 ```bash
 npm install
 npm run dev
+npm run build
 ```
 
-Then open the printed local URL (default `http://localhost:5173`).
+Vercel is configured as a Vite app (`vercel.json`). Push to `main` to ship.
 
-```bash
-npm run build    # typecheck + production bundle
-npm run preview  # serve dist/
-```
-
-## Live
-
-- App: [https://paraglider-six.vercel.app](https://paraglider-six.vercel.app)
-- Repo: [https://github.com/omeryounus/paraglider](https://github.com/omeryounus/paraglider)
-
-## Vercel
-
-This is a standard Vite app. Connect the GitHub repo in the Vercel dashboard, or deploy from the CLI:
-
-```bash
-npx vercel
-```
-
-`vercel.json` sets the Vite build command and `dist` output directory. After the first deploy, replace `public/terrain.glb` and push again to fly your own Terrain Studio map.
-
-## Project layout
+## Layout
 
 ```
-index.html
-src/main.ts        # scene, glider, aerodynamics, collision, HUD
-src/style.css
-package.json
-vite.config.ts
-public/terrain.glb # optional Terrain Studio export
+src/config/     levels, constants
+src/game/       physics, scoring, course, terrain, camera, input
+src/entities/   glider, rings, thermals, hazards, pad, orbs
+src/ui/         HUD, menus, touch
+src/main.ts     boot + frame loop
 ```
