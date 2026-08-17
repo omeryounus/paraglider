@@ -52,11 +52,10 @@ const renderer = new THREE.WebGLRenderer({
   powerPreference: 'high-performance',
   alpha: false,
   premultipliedAlpha: false,
-  logarithmicDepthBuffer: true,
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x06090e, 1);
+renderer.setClearColor(0xb7d2e8, 1);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -65,7 +64,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.getElementById('app')?.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.4, 800000);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.8, 600000);
 const composer = createComposer(renderer, scene, camera);
 const clock = new THREE.Clock();
 const raycaster = new THREE.Raycaster();
@@ -225,6 +224,7 @@ async function startLevel(id: LevelId): Promise<void> {
 
   level = getLevel(id);
   atmo = createAtmosphere(level, scene);
+  renderer.setClearColor(level.fogColor, 1);
   renderer.toneMappingExposure = 1.0;
   terrain = await loadTerrain(level, scene, atmo.sunDir);
   course = buildCourse(level, terrain, scene);

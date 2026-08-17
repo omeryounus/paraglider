@@ -20,8 +20,11 @@ export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphe
   const sky = new Sky();
   sky.name = 'SkyDome';
   sky.scale.setScalar(450000);
+  sky.renderOrder = -10;
   const skyMat = sky.material as THREE.ShaderMaterial;
   skyMat.fog = false;
+  skyMat.depthTest = false;
+  skyMat.depthWrite = false;
   skyMat.toneMapped = false;
   skyMat.fragmentShader = skyMat.fragmentShader
     .replace('#include <tonemapping_fragment>', '')
@@ -66,8 +69,8 @@ export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphe
   sun.shadow.camera.right = 140;
   sun.shadow.camera.top = 140;
   sun.shadow.camera.bottom = -140;
-  sun.shadow.bias = -0.0003;
-  sun.shadow.normalBias = 0.05;
+  sun.shadow.bias = -0.0008;
+  sun.shadow.normalBias = 0.08;
   sun.position.copy(sunDir).multiplyScalar(SUN_DISTANCE);
   scene.add(sun);
   scene.add(sun.target);

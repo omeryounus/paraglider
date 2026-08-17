@@ -420,9 +420,6 @@ function makeHeroOpaque(mat: THREE.Material): void {
     std.alphaMap = null;
     std.transparent = false;
     std.opacity = 1;
-    std.polygonOffset = true;
-    std.polygonOffsetFactor = -1;
-    std.polygonOffsetUnits = -1;
     const prev = std.onBeforeCompile.bind(std);
     std.onBeforeCompile = (shader, renderer) => {
       prev(shader, renderer);
