@@ -33,8 +33,8 @@ BLEND = ROOT / "blender" / "paraglider_studio.blend"
 SPAN = 9.23
 CHORD = 2.28
 ARC = 1.62
-CELLS = 20
-CHORD_SEGS = 16
+CELLS = 24
+CHORD_SEGS = 18
 INTAKE_V = 0.11
 CANOPY_Y = 3.15
 RISER_L = Vector((-0.35, 0.0, 0.58))
@@ -166,15 +166,11 @@ def airfoil_point(u: float, v: float, upper: bool) -> Vector:
 
 def panel_tint(u: float) -> tuple[float, float, float, float]:
     s = abs(u)
-    if s > 0.82:
-        return NAVY
-    if s > 0.78:
-        return WHITE
-    if s > 0.48:
-        return AMBER
-    if s > 0.44:
-        return WHITE
-    return CRIMSON
+    if s > 0.94:
+        return (0.58, 0.02, 0.06, 1.0)
+    if s > 0.88:
+        return (0.72, 0.035, 0.09, 1.0)
+    return (0.84, 0.05, 0.12, 1.0)
 
 
 def make_nylon(name: str, color: tuple[float, float, float, float]) -> bpy.types.Material:
@@ -630,111 +626,113 @@ def build_pilot() -> bpy.types.Object:
 
     root = new_empty("Pilot", Vector((0, 0, 0)))
 
-    # --- pod / cocoon (laying-type harness) ---
-    pv, pf = uv_sphere(0.36, 16, 10)
-    pv = transform_verts(pv, loc=Vector((0.0, 0.36, 0.10)), scale=Vector((0.70, 1.78, 0.50)))
-    pod = add_mesh("Pod", pv, pf, carbon, parent=root)
-    kv, kf = [], [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
-    # keel box
-    hx, hy, hz = 0.09, 0.58, 0.03
-    kv = [
-        Vector((-hx, -hy, -hz)), Vector((hx, -hy, -hz)), Vector((hx, hy, -hz)), Vector((-hx, hy, -hz)),
-        Vector((-hx, -hy, hz)), Vector((hx, -hy, hz)), Vector((hx, hy, hz)), Vector((-hx, hy, hz)),
-    ]
-    add_mesh("Keel", transform_verts(kv, loc=Vector((0.0, 0.40, -0.02))), kf, carbon, parent=root)
-    nv, nf = uv_sphere(0.15, 10, 6)
-    nv = transform_verts(nv, loc=Vector((0.0, 1.00, 0.07)), scale=Vector((0.72, 1.55, 0.55)))
-    add_mesh("PodNose", nv, nf, carbon, parent=root)
+    # --- Open Seated Harness (Anatomical Bucket Seat) ---
+    # Curved lower seat bucket & back protector
+    hv_v, hv_f = uv_sphere(0.32, 14, 10)
+    hv_v = transform_verts(hv_v, loc=Vector((0.0, 0.04, 0.08)), scale=Vector((0.78, 0.88, 0.72)))
+    add_mesh("HarnessBucket", hv_v, hv_f, carbon, parent=root)
 
-    # seat plate
-    sx, sy, sz = 0.18, 0.16, 0.015
+    kf = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+
+    # Seat bottom support
+    sx, sy, sz = 0.19, 0.20, 0.03
     sv = [
         Vector((-sx, -sy, -sz)), Vector((sx, -sy, -sz)), Vector((sx, sy, -sz)), Vector((-sx, sy, -sz)),
         Vector((-sx, -sy, sz)), Vector((sx, -sy, sz)), Vector((sx, sy, sz)), Vector((-sx, sy, sz)),
     ]
-    add_mesh("SeatPlate", transform_verts(sv, loc=Vector((0.0, 0.22, 0.02))), kf, carbon, parent=root)
+    add_mesh("SeatPlate", transform_verts(sv, loc=Vector((0.0, 0.12, -0.02))), kf, carbon, parent=root)
 
-    # --- torso rig (lean pivot at waist) ---
-    torso = new_empty("Torso", Vector((0.0, 0.08, 0.22)), parent=root)
-    torso.rotation_euler = Euler((math.radians(38), 0.0, 0.0), "XYZ")
+    # --- Torso Rig (Seated Posture) ---
+    torso = new_empty("Torso", Vector((0.0, 0.02, 0.18)), parent=root)
+    torso.rotation_euler = Euler((math.radians(22), 0.0, 0.0), "XYZ")
 
-    cv, cf = capsule_verts(0.15, 0.22, 10, 6)
-    cv = transform_verts(cv, loc=Vector((0.0, 0.02, 0.16)), scale=Vector((1.15, 0.72, 1.0)))
+    cv, cf = capsule_verts(0.15, 0.24, 10, 6)
+    cv = transform_verts(cv, loc=Vector((0.0, 0.02, 0.18)), scale=Vector((1.18, 0.76, 1.0)))
     add_mesh("Chest", cv, cf, jacket, parent=torso)
 
-    av, af = capsule_verts(0.13, 0.12, 8, 5)
-    av = transform_verts(av, loc=Vector((0.0, 0.0, 0.02)), scale=Vector((1.05, 0.8, 1.0)))
+    av, af = capsule_verts(0.13, 0.14, 8, 5)
+    av = transform_verts(av, loc=Vector((0.0, 0.0, 0.02)), scale=Vector((1.08, 0.82, 1.0)))
     add_mesh("Abdomen", av, af, jacket, parent=torso)
 
-    # chest strap
+    # Chest webbing strap with buckle
     strap_v, strap_f = uv_sphere(0.02, 8, 4)
-    strap_v = transform_verts(strap_v, loc=Vector((0.0, 0.04, 0.14)), scale=Vector((8.2, 1.1, 1.2)))
+    strap_v = transform_verts(strap_v, loc=Vector((0.0, 0.04, 0.18)), scale=Vector((8.4, 1.1, 1.2)))
     add_mesh("ChestStrap", strap_v, strap_f, webbing, parent=torso)
 
-    # head
-    head = new_empty("HeadShell", Vector((0.0, 0.04, 0.42)), parent=torso)
+    # Head & Helmet
+    head = new_empty("HeadShell", Vector((0.0, 0.04, 0.44)), parent=torso)
     nv, nf = capsule_verts(0.035, 0.04, 8, 4)
     add_mesh("Neck", transform_verts(nv, loc=Vector((0.0, 0.0, -0.04))), nf, skin, parent=head)
-    hv, hf = uv_sphere(0.125, 14, 10)
+    hv, hf = uv_sphere(0.13, 14, 10)
     hv = transform_verts(hv, loc=Vector((0.0, 0.01, 0.06)), scale=Vector((1.02, 1.12, 1.10)))
     add_mesh("Helmet", hv, hf, helmet_m, parent=head)
-    # visor — front band of the helmet
-    vv, vf = uv_sphere(0.112, 14, 8)
-    # keep only the front-lower hemisphere by scaling and shifting
-    vv = transform_verts(vv, loc=Vector((0.0, 0.042, 0.055)), scale=Vector((0.92, 0.55, 0.70)))
+
+    # Visor
+    vv, vf = uv_sphere(0.115, 14, 8)
+    vv = transform_verts(vv, loc=Vector((0.0, 0.045, 0.055)), scale=Vector((0.94, 0.55, 0.70)))
     add_mesh("Visor", vv, vf, visor_m, parent=head)
-    # jaw / face peek
+
     fv, ff = uv_sphere(0.055, 8, 6)
     add_mesh("Face", transform_verts(fv, loc=Vector((0.0, 0.05, 0.02))), ff, skin, parent=head)
     eye = new_empty("Eye", Vector((0.0, 0.13, 0.05)), parent=head)
 
+    # Arms holding brake toggles up near ear/riser height (as shown in reference photo)
     def make_arm(side: float, name: str) -> bpy.types.Object:
-        arm = new_empty(name, Vector((side * 0.17, 0.02, 0.30)), parent=torso)
-        # local -Z is "down the arm"; rotate so it reaches toward the riser
-        arm.rotation_euler = Euler((math.radians(-78), 0.0, math.radians(side * 22)), "XYZ")
-        uv, uf = capsule_verts(0.038, 0.18, 7, 5)
-        add_mesh(f"{name}_Upper", transform_verts(uv, loc=Vector((0.0, 0.0, -0.12))), uf, jacket, parent=arm)
-        lv, lf = capsule_verts(0.032, 0.16, 7, 5)
-        add_mesh(f"{name}_Lower", transform_verts(lv, loc=Vector((0.0, 0.0, -0.32))), lf, jacket, parent=arm)
-        hv, hf = uv_sphere(0.034, 8, 6)
-        hand = add_mesh(f"{name}_Hand", transform_verts(hv, loc=Vector((0.0, 0.0, -0.44))), hf, skin, parent=arm)
-        # brake toggle
-        tv, tf = uv_sphere(0.018, 8, 6)
-        tv = transform_verts(tv, loc=Vector((0.0, 0.0, 0.0)), scale=Vector((1.6, 0.55, 1.6)))
+        arm = new_empty(name, Vector((side * 0.18, 0.02, 0.32)), parent=torso)
+        # Reached upwards toward brake line pulleys
+        arm.rotation_euler = Euler((math.radians(35), 0.0, math.radians(side * 28)), "XYZ")
+        uv, uf = capsule_verts(0.04, 0.19, 7, 5)
+        add_mesh(f"{name}_Upper", transform_verts(uv, loc=Vector((0.0, 0.08, 0.10))), uf, jacket, parent=arm)
+        lv, lf = capsule_verts(0.034, 0.18, 7, 5)
+        add_mesh(f"{name}_Lower", transform_verts(lv, loc=Vector((0.0, 0.18, 0.26))), lf, jacket, parent=arm)
+        hv, hf = uv_sphere(0.036, 8, 6)
+        hand = add_mesh(f"{name}_Hand", transform_verts(hv, loc=Vector((0.0, 0.24, 0.38))), hf, skin, parent=arm)
+        # Red brake toggle
+        tv, tf = uv_sphere(0.022, 8, 6)
+        tv = transform_verts(tv, loc=Vector((0.0, 0.0, 0.0)), scale=Vector((1.8, 0.55, 1.8)))
         add_mesh(f"{name}_Toggle", tv, tf, toggle_m, parent=hand)
         return arm
 
     make_arm(-1.0, "LeftArm")
     make_arm(1.0, "RightArm")
 
-    # legs in the pod, slightly bent
+    # --- Seated Legs (Thighs forward, knees bent ~60°, boots dangling in open air) ---
     for side, tag in ((-1.0, "L"), (1.0, "R")):
-        tv, tf = capsule_verts(0.05, 0.22, 8, 5)
+        # Thigh extending forward from seat plate
+        tv, tf = capsule_verts(0.056, 0.28, 8, 5)
         tv = transform_verts(
             tv,
-            loc=Vector((side * 0.07, 0.38, 0.06)),
-            scale=Vector((0.95, 1.0, 1.0)),
-            rot=Euler((math.radians(78), 0.0, 0.0), "XYZ"),
+            loc=Vector((side * 0.11, 0.24, 0.02)),
+            scale=Vector((1.0, 1.0, 1.0)),
+            rot=Euler((math.radians(32), 0.0, math.radians(side * 5)), "XYZ"),
         )
         add_mesh(f"Thigh_{tag}", tv, tf, pants, parent=root)
-        sv, sf = capsule_verts(0.042, 0.20, 8, 5)
+
+        # Leg harness strap around thigh
+        lsv, lsf = uv_sphere(0.06, 8, 4)
+        lsv = transform_verts(lsv, loc=Vector((side * 0.11, 0.20, 0.02)), scale=Vector((1.05, 0.4, 1.05)))
+        add_mesh(f"LegStrap_{tag}", lsv, lsf, webbing, parent=root)
+
+        # Shin hanging downward with natural knee bend
+        sv, sf = capsule_verts(0.046, 0.26, 8, 5)
         sv = transform_verts(
             sv,
-            loc=Vector((side * 0.07, 0.68, 0.02)),
-            scale=Vector((0.95, 1.0, 1.0)),
-            rot=Euler((math.radians(92), 0.0, 0.0), "XYZ"),
+            loc=Vector((side * 0.11, 0.38, -0.22)),
+            scale=Vector((1.0, 1.0, 1.0)),
+            rot=Euler((math.radians(-62), 0.0, math.radians(side * 3)), "XYZ"),
         )
         add_mesh(f"Shin_{tag}", sv, sf, pants, parent=root)
-        bv, bf = [], kf
-        bx, by, bz = 0.04, 0.10, 0.028
+
+        # Boots at feet dangling freely
+        bx, by, bz = 0.046, 0.11, 0.042
         bv = [
             Vector((-bx, -by, -bz)), Vector((bx, -by, -bz)), Vector((bx, by, -bz)), Vector((-bx, by, -bz)),
             Vector((-bx, -by, bz)), Vector((bx, -by, bz)), Vector((bx, by, bz)), Vector((-bx, by, bz)),
         ]
         add_mesh(
             f"Boot_{tag}",
-            transform_verts(bv, loc=Vector((side * 0.07, 0.90, 0.00))),
-            bf,
+            transform_verts(bv, loc=Vector((side * 0.11, 0.46, -0.42)), rot=Euler((math.radians(12), 0.0, 0.0), "XYZ")),
+            kf,
             boot_m,
             parent=root,
         )

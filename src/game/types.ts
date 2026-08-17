@@ -79,6 +79,15 @@ export interface FlightState {
   inDowndraft: boolean;
   windX: number;
   windZ: number;
+  leftBrake: number;
+  rightBrake: number;
+  speedBar: number;
+  weightShift: number;
+  bigEars: boolean;
+  stall: boolean;
+  harnessRoll: number;
+  harnessPitch: number;
+  glideRatio: number;
 }
 
 export interface ScoreState {

@@ -22,7 +22,7 @@ export interface TerrainWorld {
 
 const loader = (() => {
   const draco = new DRACOLoader();
-  draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+  draco.setDecoderPath('./draco/');
   const gltf = new GLTFLoader();
   gltf.setDRACOLoader(draco);
   return gltf;

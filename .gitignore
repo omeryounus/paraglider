@@ -1,5 +1,7 @@
 node_modules
 dist
+submission_pkg
+*.zip
 .DS_Store
 *.local
 .vercel

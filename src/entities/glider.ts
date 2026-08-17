@@ -1,144 +1,204 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import type { FlightState } from '../game/types';
+import {
+  CANOPY_Y,
+  CHORD,
+  SEGS_X,
+  SEGS_Z,
+  SPAN,
+} from '../config/constants';
 import { damp } from '../game/math';
-
-const SPAN = 9.2;
-const CHORD = 2.55;
-const SEGS_X = 48;
-const SEGS_Z = 16;
-const CANOPY_Y = 3.15;
-const GALLERIES = 4;
+import type { FlightState } from '../game/types';
 
 export interface GliderVisual {
   root: THREE.Group;
   canopy: THREE.Group;
   wing: THREE.Mesh;
-  eye: THREE.Object3D;
-  helmet: THREE.Object3D;
   lines: THREE.LineSegments;
+  brakeLines: THREE.LineSegments;
+  pilotGroup: THREE.Group;
+  helmet: THREE.Object3D;
+  eye: THREE.Object3D;
+  leftRiser: THREE.Object3D;
+  rightRiser: THREE.Object3D;
+  leftToggle: THREE.Object3D;
+  rightToggle: THREE.Object3D;
 }
 
-interface PilotRig {
-  group: THREE.Object3D;
-  torso: THREE.Object3D;
-  headShell: THREE.Object3D;
+export interface PilotRig {
+  group: THREE.Group;
+  torso: THREE.Group;
+  headShell: THREE.Group;
   eye: THREE.Object3D;
-  leftArm: THREE.Object3D;
-  rightArm: THREE.Object3D;
-  leftForearm: THREE.Object3D;
-  rightForearm: THREE.Object3D;
-  leftHand: THREE.Object3D;
-  rightHand: THREE.Object3D;
+  leftArm: THREE.Group;
+  rightArm: THREE.Group;
+  leftHand: THREE.Mesh;
+  rightHand: THREE.Mesh;
+  leftToggle: THREE.Object3D;
+  rightToggle: THREE.Object3D;
+  legs: THREE.Group;
   leftRiser: THREE.Object3D;
   rightRiser: THREE.Object3D;
   restTorsoX: number;
   restArmX: number;
-  restForearmX: number;
 }
 
 interface LineBind {
   vert: number;
   side: 'L' | 'R';
-  gallery: number;
-  kind: 'cascade' | 'brake';
+  type: 'A' | 'B' | 'C' | 'D' | 'brake';
+  spanT: number;
 }
 
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
-const _c = new THREE.Vector3();
-const _d = new THREE.Vector3();
-const _mid = new THREE.Vector3();
-const _fwd = new THREE.Vector3(0, 0, 1);
-const GATHER_LOCAL = [
-  new THREE.Vector3(0, 0.98, -0.2),
-  new THREE.Vector3(0, 1.05, -0.04),
-  new THREE.Vector3(0, 1.02, 0.12),
-  new THREE.Vector3(0, 0.92, 0.28),
-];
 
 export function createGlider(): GliderVisual {
   const root = new THREE.Group();
   root.name = 'Paraglider';
 
   const canopy = new THREE.Group();
+  canopy.name = 'CanopyRig';
   canopy.position.y = CANOPY_Y;
-  const { geometry, binds } = createAirfoil();
-  const wing = new THREE.Mesh(
-    geometry,
-    new THREE.MeshStandardMaterial({
-      color: 0xd90429,
-      vertexColors: true,
-      side: THREE.DoubleSide,
-      shadowSide: THREE.DoubleSide,
-      roughness: 0.48,
-      metalness: 0.05,
-      emissive: 0x3a0a12,
-      emissiveIntensity: 0.22,
-      transparent: false,
-      opacity: 1,
-      depthWrite: true,
-      fog: false,
-      flatShading: false,
-      dithering: true,
-    }),
-  );
+
+  // 1. Aerodynamic Ram-Air Canopy Mesh with NACA Camber & Open Intakes
+  const { geometry, binds, brakeBinds } = createAirfoil();
+
+  // Translucent ruby fabric material with sun backlight effect
+  const wingMat = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.36,
+    metalness: 0.03,
+    side: THREE.DoubleSide,
+    shadowSide: THREE.DoubleSide,
+    fog: true,
+  });
+
+  // Shader enhancement for sun backlight transmission through ripstop nylon
+  wingMat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <dithering_fragment>',
+      `
+      #include <dithering_fragment>
+      // Warm golden sun backlight transmission on underside of wing
+      vec3 lightDir = normalize(vec3(0.3, 0.8, 0.5));
+      float sunBacklight = max(0.0, dot(normalize(-vNormal), lightDir));
+      gl_FragColor.rgb += vec3(0.85, 0.28, 0.05) * sunBacklight * 0.35;
+      `
+    );
+  };
+
+  const wing = new THREE.Mesh(geometry, wingMat);
+  wing.name = 'CanopyMesh';
   wing.castShadow = true;
-  wing.receiveShadow = false;
-  wing.userData.binds = binds;
+  wing.receiveShadow = true;
   canopy.add(wing);
 
-  const cascadeCount = binds.filter((b) => b.kind === 'cascade').length;
-  const brakeCount = binds.filter((b) => b.kind === 'brake').length;
-  const lineGeo = new THREE.BufferGeometry();
-  lineGeo.setAttribute(
-    'position',
-    new THREE.BufferAttribute(new Float32Array((cascadeCount + brakeCount) * 6), 3),
-  );
-  const lines = new THREE.LineSegments(
-    lineGeo,
-    new THREE.LineBasicMaterial({
-      color: 0x1a1a1c,
-      transparent: false,
-      opacity: 1,
-      depthWrite: true,
-      fog: false,
-    }),
-  );
-  lines.frustumCulled = false;
-  lines.name = 'Suspension';
+  // 2. Rib Seam Tapes (High-definition dark cell partition seams)
+  const ribMesh = createRibTapes();
+  canopy.add(ribMesh);
 
-  const straps = createRiserStraps();
+  // 3. Open Seated Pilot Rig (Classic seated harness with dangling boots and raised arms)
   const pilot = createPilot();
-  root.add(canopy, pilot.group, lines, straps);
-  root.userData.pilot = pilot;
-  root.userData.straps = straps;
-  root.userData.rest = (geometry.getAttribute('rest') as THREE.BufferAttribute).array as Float32Array;
+  root.add(pilot.group);
+  root.add(canopy);
 
-  return { root, canopy, wing, eye: pilot.eye, helmet: pilot.headShell, lines };
+  // 4. Cascade Suspension Lines (A, B, C, D Lines)
+  const lineCount = binds.length;
+  const linePos = new Float32Array(lineCount * 2 * 3);
+  const lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+  const lineMat = new THREE.LineBasicMaterial({
+    color: 0x14181c,
+    linewidth: 1,
+    transparent: true,
+    opacity: 0.88,
+  });
+  const lines = new THREE.LineSegments(lineGeo, lineMat);
+  lines.name = 'CascadeLines';
+  root.add(lines);
+
+  // 5. Dynamic High-Vis Brake Lines (Connected directly from trailing edge down into pilot hands)
+  const brakeCount = brakeBinds.length;
+  const brakeLinePos = new Float32Array(brakeCount * 2 * 3);
+  const brakeLineGeo = new THREE.BufferGeometry();
+  brakeLineGeo.setAttribute('position', new THREE.BufferAttribute(brakeLinePos, 3));
+  const brakeLineMat = new THREE.LineBasicMaterial({
+    color: 0xd82418,
+    linewidth: 1.5,
+    transparent: true,
+    opacity: 0.95,
+  });
+  const brakeLines = new THREE.LineSegments(brakeLineGeo, brakeLineMat);
+  brakeLines.name = 'BrakeLines';
+  root.add(brakeLines);
+
+  // Cache rest position for cloth deformation
+  const restPos = geometry.getAttribute('position').array.slice(0);
+  root.userData = {
+    pilot,
+    binds,
+    brakeBinds,
+    rest: restPos,
+  };
+
+  return {
+    root,
+    canopy,
+    wing,
+    lines,
+    brakeLines,
+    pilotGroup: pilot.group,
+    helmet: pilot.headShell,
+    eye: pilot.eye,
+    leftRiser: pilot.leftRiser,
+    rightRiser: pilot.rightRiser,
+    leftToggle: pilot.leftToggle,
+    rightToggle: pilot.rightToggle,
+  };
 }
 
-function panelColor(u: number, dest: number[]): void {
-  const band = Math.floor(u * 6);
-  if (band === 0 || band === 5) dest.push(0.12, 0.16, 0.38);
-  else if (band === 1 || band === 4) dest.push(1, 0.62, 0.18);
-  else dest.push(0.85, 0.03, 0.16);
+function panelColor(u: number, v: number, dest: number[]): void {
+  // Rich Radiant Ruby Red canopy with deep wine tip shading matching reference image
+  const s = Math.abs((u - 0.5) * 2); // 0 (center) to 1 (tips)
+  const isStripe = v > 0.38 && v < 0.44;
+
+  if (isStripe && s < 0.75) {
+    dest.push(0.96, 0.94, 0.95); // White leading accent band
+  } else if (s > 0.94) {
+    dest.push(0.55, 0.02, 0.06); // Dark wine tips
+  } else if (s > 0.88) {
+    dest.push(0.72, 0.035, 0.09);
+  } else {
+    dest.push(0.86, 0.05, 0.12); // Radiant ruby core
+  }
 }
 
 function airfoilAt(u: number, v: number, surface: 'top' | 'bot'): { x: number; y: number; z: number } {
-  const s = (u - 0.5) * 2;
-  const plan = Math.sqrt(Math.max(0.04, 1 - s * s));
-  const localChord = CHORD * (0.42 + 0.58 * plan);
+  const s = (u - 0.5) * 2; // -1 to 1
+  const plan = Math.sqrt(Math.max(0.04, 1 - s * s * 0.95));
+  const localChord = CHORD * (0.45 + 0.55 * plan);
   const x = s * (SPAN * 0.5);
+
+  // Trailing edge is at +Z, leading edge is at -Z (aligned with flight direction towards +Z)
   const z = (v - 0.22) * localChord;
-  const camber = Math.sin(Math.PI * v) * 0.22 * plan;
-  const thick = Math.sin(Math.PI * v) * 0.07 * plan;
-  const arc = s * s * 1.05;
-  const y = camber + (surface === 'top' ? thick : -thick * 0.85) - arc;
+
+  // Aerodynamic NACA-style camber & thickness curve
+  const camber = Math.sin(Math.PI * v) * 0.24 * plan;
+  const thick = Math.sin(Math.PI * Math.pow(v, 0.65)) * 0.08 * plan;
+
+  // Anhedral parabolic arc (center is highest, tips curve down)
+  const arc = s * s * 1.35;
+  const y = camber + (surface === 'top' ? thick : -thick * 0.75) - arc;
+
   return { x, y, z };
 }
 
-function createAirfoil(): { geometry: THREE.BufferGeometry; binds: LineBind[] } {
+function createAirfoil(): {
+  geometry: THREE.BufferGeometry;
+  binds: LineBind[];
+  brakeBinds: LineBind[];
+} {
   const cols = SEGS_X + 1;
   const rows = SEGS_Z + 1;
   const positions: number[] = [];
@@ -154,10 +214,11 @@ function createAirfoil(): { geometry: THREE.BufferGeometry; binds: LineBind[] } 
         const p = airfoilAt(u, v, surface);
         positions.push(p.x, p.y, p.z);
         uvs.push(u, v);
-        panelColor(u, colors);
+        panelColor(u, v, colors);
       }
     }
   };
+
   push('top');
   push('bot');
 
@@ -171,61 +232,115 @@ function createAirfoil(): { geometry: THREE.BufferGeometry; binds: LineBind[] } 
     if (flip) indices.push(a, b, c, b, d, c);
     else indices.push(a, c, b, b, c, d);
   };
+
   for (let j = 0; j < SEGS_Z; j++) {
     for (let i = 0; i < SEGS_X; i++) {
       face(topOff, i, j, false);
       face(botOff, i, j, true);
     }
   }
+
+  // Close leading edge and trailing edge seams
   for (let i = 0; i < SEGS_X; i++) {
     const t0 = topOff + i;
     const t1 = t0 + 1;
     const b0 = botOff + i;
     const b1 = b0 + 1;
     indices.push(t0, b0, t1, t1, b0, b1);
+
     const tt0 = topOff + SEGS_Z * cols + i;
     const tt1 = tt0 + 1;
     const bb0 = botOff + SEGS_Z * cols + i;
     const bb1 = bb0 + 1;
-    indices.push(tt0, tt1, bb0, tt1, bb0, bb1);
+    indices.push(tt0, tt1, bb0, tt1, bb1, bb0);
   }
 
-  const geo = new THREE.BufferGeometry();
-  const pos = new Float32Array(positions);
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('rest', new THREE.BufferAttribute(pos.slice(), 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-
-  const binds: LineBind[] = [];
-  const rowsV = [0.16, 0.38, 0.6, 0.8];
-  const stations = [0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9];
-  for (let g = 0; g < rowsV.length; g++) {
-    const j = Math.round(rowsV[g] * SEGS_Z);
-    for (const u of stations) {
-      const i = Math.round(u * SEGS_X);
-      binds.push({
-        vert: botOff + j * cols + i,
-        side: u < 0.5 ? 'L' : 'R',
-        gallery: g,
-        kind: 'cascade',
-      });
+  // Add side caps / wingtip stabilizer ears
+  for (const side of [0, SEGS_X]) {
+    for (let j = 0; j < SEGS_Z; j++) {
+      const t0 = topOff + j * cols + side;
+      const t1 = topOff + (j + 1) * cols + side;
+      const b0 = botOff + j * cols + side;
+      const b1 = botOff + (j + 1) * cols + side;
+      if (side === 0) {
+        indices.push(t0, b0, t1, t1, b0, b1);
+      } else {
+        indices.push(t0, t1, b0, b0, t1, b1);
+      }
     }
   }
-  const brakeU = [0.18, 0.34, 0.66, 0.82];
-  const brakeJ = Math.round(0.96 * SEGS_Z);
-  for (const u of brakeU) {
-    const i = Math.round(u * SEGS_X);
-    binds.push({
-      vert: botOff + brakeJ * cols + i,
-      side: u < 0.5 ? 'L' : 'R',
-      gallery: 3,
-      kind: 'brake',
-    });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  // 6. Generate Attachment Anchor Binds (A, B, C, D lines + Trailing Edge Brake Fan)
+  const binds: LineBind[] = [];
+  const brakeBinds: LineBind[] = [];
+
+  // Span stations across both left and right wings
+  const ribIndices = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
+
+  for (const i of ribIndices) {
+    const u = i / SEGS_X;
+    const side = u < 0.5 ? 'L' : 'R';
+    const spanT = (u - 0.5) * 2;
+
+    // Line stations along bottom chord:
+    // A-lines (Leading edge 12%), B-lines (32%), C-lines (55%), D-lines (78%)
+    const chordStations: Array<{ vIdx: number; type: LineBind['type'] }> = [
+      { vIdx: Math.round(SEGS_Z * 0.12), type: 'A' },
+      { vIdx: Math.round(SEGS_Z * 0.32), type: 'B' },
+      { vIdx: Math.round(SEGS_Z * 0.55), type: 'C' },
+      { vIdx: Math.round(SEGS_Z * 0.78), type: 'D' },
+    ];
+
+    for (const st of chordStations) {
+      const vert = botOff + st.vIdx * cols + i;
+      binds.push({ vert, side, type: st.type, spanT });
+    }
+
+    // Trailing edge brake line fans (98% chord)
+    if (Math.abs(spanT) > 0.18) {
+      const brakeVert = botOff + (SEGS_Z - 1) * cols + i;
+      brakeBinds.push({ vert: brakeVert, side, type: 'brake', spanT });
+    }
   }
-  return { geometry: geo, binds };
+
+  return { geometry, binds, brakeBinds };
+}
+
+function createRibTapes(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'RibTapes';
+  const ribMat = new THREE.MeshBasicMaterial({
+    color: 0x180406,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.35,
+  });
+
+  for (let i = 1; i < SEGS_X; i++) {
+    const u = i / SEGS_X;
+    const pts: THREE.Vector3[] = [];
+    for (let j = 0; j <= SEGS_Z; j++) {
+      const v = j / SEGS_Z;
+      const top = airfoilAt(u, v, 'top');
+      pts.push(new THREE.Vector3(top.x, top.y, top.z));
+    }
+    for (let j = SEGS_Z; j >= 0; j--) {
+      const v = j / SEGS_Z;
+      const bot = airfoilAt(u, v, 'bot');
+      pts.push(new THREE.Vector3(bot.x, bot.y, bot.z));
+    }
+    const ribGeo = new THREE.BufferGeometry().setFromPoints(pts);
+    const line = new THREE.Line(ribGeo, ribMat);
+    group.add(line);
+  }
+  return group;
 }
 
 function skin(color: number, rough = 0.65, metal = 0.06): THREE.MeshStandardMaterial {
@@ -236,257 +351,188 @@ function skin(color: number, rough = 0.65, metal = 0.06): THREE.MeshStandardMate
     transparent: false,
     opacity: 1,
     depthWrite: true,
-    fog: false,
+    fog: true,
   });
-}
-
-function applyFresnelRim(mat: THREE.MeshStandardMaterial, color: number, power = 2.5, gain = 0.48): void {
-  const rim = new THREE.Color(color);
-  mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uRimColor = { value: rim };
-    shader.uniforms.uRimPower = { value: power };
-    shader.uniforms.uRimGain = { value: gain };
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-        uniform vec3 uRimColor;
-        uniform float uRimPower;
-        uniform float uRimGain;`,
-      )
-      .replace(
-        '#include <emissivemap_fragment>',
-        `#include <emissivemap_fragment>
-        {
-          float fres = pow(clamp(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0), uRimPower);
-          totalEmissiveRadiance += uRimColor * fres * uRimGain;
-        }`,
-      );
-  };
-  mat.customProgramCacheKey = () => `pilot-rim-${color.toString(16)}-${power}-${gain}`;
-  mat.needsUpdate = true;
-}
-
-function createRiserStraps(): THREE.Group {
-  const group = new THREE.Group();
-  group.name = 'RiserStraps';
-  const webbing = new THREE.MeshStandardMaterial({
-    color: 0x1c1814,
-    roughness: 0.52,
-    metalness: 0.06,
-    fog: false,
-  });
-  for (let side = 0; side < 2; side++) {
-    for (let g = 0; g < GALLERIES; g++) {
-      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.01, 1), webbing);
-      strap.castShadow = true;
-      strap.name = `Riser_${side === 0 ? 'L' : 'R'}_${'ABCD'[g]}`;
-      group.add(strap);
-    }
-  }
-  return group;
-}
-
-function mesh(
-  geo: THREE.BufferGeometry,
-  mat: THREE.Material,
-  parent: THREE.Object3D,
-  pos: [number, number, number],
-  rot: [number, number, number] = [0, 0, 0],
-): THREE.Mesh {
-  const m = new THREE.Mesh(geo, mat);
-  m.position.set(...pos);
-  m.rotation.set(...rot);
-  m.castShadow = true;
-  parent.add(m);
-  return m;
 }
 
 function createPilot(): PilotRig {
   const group = new THREE.Group();
-  group.name = 'Pilot';
-  const jacket = skin(0x2c3846, 0.56, 0.08);
-  const pants = skin(0x1b2128, 0.66, 0.05);
-  const flesh = skin(0xc58a5a, 0.52);
-  const bootMat = skin(0x141414, 0.4, 0.14);
-  const carbon = new THREE.MeshStandardMaterial({
-    color: 0x171c21,
-    roughness: 0.34,
-    metalness: 0.28,
-    fog: false,
-  });
-  applyFresnelRim(carbon, 0x8eb8e6, 2.4, 0.38);
-  const webbing = skin(0x2c2418, 0.54, 0.04);
-  const buckle = new THREE.MeshStandardMaterial({
-    color: 0xb7bec4,
-    roughness: 0.26,
-    metalness: 0.84,
-    fog: false,
-  });
-  const helmetMat = new THREE.MeshStandardMaterial({
-    color: 0x1a222a,
-    roughness: 0.24,
-    metalness: 0.4,
-    fog: false,
-  });
-  applyFresnelRim(helmetMat, 0xa8d2ff, 2.1, 0.64);
+  group.name = 'PilotRig';
 
-  const torso = new THREE.Group();
-  torso.name = 'Torso';
-  torso.position.set(0, 0.2, 0.04);
-  torso.rotation.x = 0.32;
-  group.add(torso);
+  const jacket = skin(0x181e26, 0.65, 0.08);
+  const pants = skin(0x12151a, 0.72, 0.05);
+  const flesh = skin(0xd49b6a, 0.55);
+  const harnessMat = new THREE.MeshStandardMaterial({
+    color: 0x15181e,
+    roughness: 0.42,
+    metalness: 0.22,
+    fog: true,
+  });
+  const bootMat = skin(0x0e1012, 0.4, 0.2);
 
-  const pelvis = mesh(new THREE.SphereGeometry(0.11, 14, 10), pants, torso, [0, 0.02, 0.02]);
-  pelvis.scale.set(1.15, 0.72, 0.95);
-  mesh(new THREE.CapsuleGeometry(0.105, 0.1, 6, 10), jacket, torso, [0, 0.14, 0.01]);
-  const chest = mesh(new THREE.CapsuleGeometry(0.125, 0.16, 6, 12), jacket, torso, [0, 0.3, 0.0]);
-  chest.scale.set(1.18, 1, 0.82);
-  mesh(new THREE.SphereGeometry(0.07, 10, 8), jacket, torso, [0, 0.4, 0.01]).scale.set(1.35, 0.55, 0.9);
-
-  const head = new THREE.Group();
-  head.position.set(0, 0.5, 0.05);
-  torso.add(head);
-  mesh(new THREE.CapsuleGeometry(0.032, 0.045, 5, 8), flesh, head, [0, -0.04, 0.01]);
-  const headShell = new THREE.Group();
-  headShell.name = 'HeadShell';
-  head.add(headShell);
-  const skull = mesh(new THREE.SphereGeometry(0.09, 16, 12), flesh, headShell, [0, 0.05, 0.0]);
-  skull.scale.set(0.92, 1.02, 0.95);
-  const helmet = mesh(new THREE.SphereGeometry(0.108, 18, 14), helmetMat, headShell, [0, 0.055, -0.006]);
-  helmet.scale.set(1.04, 1.08, 1.16);
-  mesh(
-    new THREE.SphereGeometry(0.096, 16, 12, 0, Math.PI * 2, 0.55, 1.05),
-    new THREE.MeshStandardMaterial({
-      color: 0x071018,
-      roughness: 0.08,
-      metalness: 0.92,
-      envMapIntensity: 1.5,
-      fog: false,
-    }),
-    headShell,
-    [0, 0.04, 0.034],
+  // --- 1. Open Seated Harness (Anatomical Bucket Seat) ---
+  const harnessBucket = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32, 16, 12),
+    harnessMat,
   );
-  mesh(new THREE.SphereGeometry(0.016, 8, 6), flesh, headShell, [-0.028, 0.048, 0.072]);
-  mesh(new THREE.SphereGeometry(0.016, 8, 6), flesh, headShell, [0.028, 0.048, 0.072]);
-  mesh(new THREE.SphereGeometry(0.022, 8, 6), flesh, headShell, [0, 0.01, 0.078]);
+  harnessBucket.scale.set(0.82, 0.88, 0.74);
+  harnessBucket.position.set(0, 0.06, 0.06);
+  harnessBucket.castShadow = true;
+
+  const seatBottom = new THREE.Mesh(
+    new THREE.BoxGeometry(0.38, 0.08, 0.42),
+    harnessMat,
+  );
+  seatBottom.position.set(0, -0.04, 0.12);
+  seatBottom.castShadow = true;
+
+  // --- 2. Pilot Torso (Seated Upright/Slight Recline) ---
+  const torso = new THREE.Group();
+  torso.position.set(0, 0.18, 0.04);
+  torso.rotation.x = 0.22;
+
+  const chest = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.28, 4, 8), jacket);
+  chest.position.set(0, 0.16, 0.02);
+  chest.castShadow = true;
+
+  // Harness chest strap & quick release buckle
+  const chestStrap = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.08), skin(0xba2222, 0.4));
+  chestStrap.position.set(0, 0.18, 0.08);
+  torso.add(chest, chestStrap);
+
+  // --- 3. Head & Sleek Black Helmet ---
+  const head = new THREE.Group();
+  head.position.set(0, 0.42, 0.08);
+  const headShell = new THREE.Group();
+
+  const helmet = new THREE.Mesh(
+    new THREE.SphereGeometry(0.13, 18, 14),
+    new THREE.MeshStandardMaterial({
+      color: 0x14181f,
+      roughness: 0.22,
+      metalness: 0.45,
+      fog: true,
+    }),
+  );
+  helmet.scale.set(1.02, 1.12, 1.14);
+  helmet.castShadow = true;
+
+  // Dark Mirrored Visor
+  const visor = new THREE.Mesh(
+    new THREE.SphereGeometry(0.118, 18, 14, 0, Math.PI * 2, 0.46, 1.15),
+    new THREE.MeshStandardMaterial({
+      color: 0x050c14,
+      roughness: 0.06,
+      metalness: 0.96,
+      fog: true,
+    }),
+  );
+  visor.position.set(0, 0.0, 0.035);
+  visor.castShadow = true;
+  headShell.add(helmet, visor);
+
   const eye = new THREE.Object3D();
-  eye.name = 'Eye';
-  eye.position.set(0, 0.05, 0.12);
-  headShell.add(eye);
+  eye.position.set(0, 0.02, 0.14);
+  head.add(headShell, eye);
+  torso.add(head);
 
-  const makeArm = (side: number): { root: THREE.Group; forearm: THREE.Group; hand: THREE.Object3D } => {
-    const root = new THREE.Group();
-    root.position.set(side * 0.168, 0.36, 0.02);
-    root.rotation.z = side * 0.72;
-    root.rotation.x = 0.12;
-    mesh(new THREE.SphereGeometry(0.048, 12, 10), jacket, root, [0, 0.0, 0]);
-    mesh(new THREE.CapsuleGeometry(0.04, 0.16, 5, 10), jacket, root, [0, -0.11, 0]);
-    mesh(new THREE.SphereGeometry(0.038, 10, 8), jacket, root, [0, -0.21, 0]);
-    const forearm = new THREE.Group();
-    forearm.position.set(0, -0.21, 0);
-    forearm.rotation.x = -1.78;
-    root.add(forearm);
-    mesh(new THREE.CapsuleGeometry(0.034, 0.14, 5, 10), jacket, forearm, [0, -0.1, 0]);
-    mesh(new THREE.SphereGeometry(0.03, 8, 6), jacket, forearm, [0, -0.19, 0]);
-    const hand = new THREE.Group();
-    hand.position.set(0, -0.23, 0);
-    forearm.add(hand);
-    mesh(new THREE.BoxGeometry(0.042, 0.055, 0.022), flesh, hand, [0, -0.02, 0.004]);
-    for (let f = 0; f < 4; f++) {
-      const x = (f - 1.5) * 0.01;
-      mesh(new THREE.CapsuleGeometry(0.0055, 0.028, 3, 5), flesh, hand, [x, -0.055, 0.004], [0.35, 0, 0]);
-    }
-    mesh(new THREE.CapsuleGeometry(0.006, 0.02, 3, 5), flesh, hand, [side * -0.018, -0.03, 0.01], [0.4, 0, side * 0.7]);
-    const toggle = mesh(
-      new THREE.TorusGeometry(0.026, 0.006, 6, 12),
-      new THREE.MeshStandardMaterial({ color: 0xd82418, roughness: 0.35, fog: false }),
-      hand,
-      [0, -0.04, 0.018],
-      [Math.PI / 2, 0, 0],
+  // --- 4. Arms Raised Holding Red Brake Toggles Up at Ear Level ---
+  const makeArm = (side: number): {
+    armRoot: THREE.Group;
+    hand: THREE.Mesh;
+    toggle: THREE.Object3D;
+  } => {
+    const armRoot = new THREE.Group();
+    armRoot.position.set(side * 0.18, 0.26, 0.04);
+    armRoot.rotation.z = side * 0.42;
+    armRoot.rotation.x = 0.45; // Raised upward towards the risers
+
+    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.042, 0.20, 3, 6), jacket);
+    upper.position.set(0, 0.10, 0.08);
+    upper.castShadow = true;
+
+    const lower = new THREE.Mesh(new THREE.CapsuleGeometry(0.036, 0.18, 3, 6), jacket);
+    lower.position.set(0, 0.22, 0.22);
+    lower.castShadow = true;
+
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 6), flesh);
+    hand.position.set(0, 0.28, 0.32);
+    hand.castShadow = true;
+
+    // High-vis Red Brake Toggle Ring
+    const toggle = new THREE.Mesh(
+      new THREE.TorusGeometry(0.036, 0.009, 6, 12),
+      new THREE.MeshStandardMaterial({ color: 0xd82418, roughness: 0.28 }),
     );
-    toggle.castShadow = true;
-    return { root, forearm, hand };
+    toggle.rotation.x = Math.PI / 2;
+    hand.add(toggle);
+
+    armRoot.add(upper, lower, hand);
+    return { armRoot, hand, toggle };
   };
-  const left = makeArm(-1);
-  const right = makeArm(1);
-  torso.add(left.root, right.root);
 
-  const makeLeg = (side: number): void => {
-    const hip = new THREE.Group();
-    hip.position.set(side * 0.065, 0.0, 0.06);
-    hip.rotation.x = 1.18;
-    group.add(hip);
-    mesh(new THREE.SphereGeometry(0.055, 12, 10), pants, hip, [0, 0, 0]);
-    mesh(new THREE.CapsuleGeometry(0.05, 0.2, 5, 10), pants, hip, [0, -0.14, 0]);
-    const knee = new THREE.Group();
-    knee.position.set(0, -0.26, 0);
-    knee.rotation.x = 0.22;
-    hip.add(knee);
-    mesh(new THREE.SphereGeometry(0.042, 10, 8), pants, knee, [0, 0, 0]);
-    mesh(new THREE.CapsuleGeometry(0.038, 0.18, 5, 10), pants, knee, [0, -0.12, 0]);
-    const ankle = new THREE.Group();
-    ankle.position.set(0, -0.24, 0);
-    ankle.rotation.x = -0.35;
-    knee.add(ankle);
-    mesh(new THREE.SphereGeometry(0.028, 8, 6), bootMat, ankle, [0, 0, 0]);
-    mesh(new THREE.BoxGeometry(0.07, 0.05, 0.16), bootMat, ankle, [0, -0.012, 0.055]);
-    mesh(new THREE.BoxGeometry(0.062, 0.028, 0.05), bootMat, ankle, [0, -0.008, 0.12]);
+  const leftArmData = makeArm(-1);
+  const rightArmData = makeArm(1);
+  torso.add(leftArmData.armRoot, rightArmData.armRoot);
+
+  // --- 5. Open Seated Legs (Thighs forward, knees bent ~60°, boots dangling in open air) ---
+  const legs = new THREE.Group();
+  legs.position.set(0, 0, 0);
+
+  const makeLeg = (side: number): THREE.Group => {
+    const legRoot = new THREE.Group();
+    legRoot.position.set(side * 0.11, 0.02, 0.12);
+
+    // Thigh angled slightly forward/up
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.054, 0.26, 4, 8), pants);
+    thigh.rotation.x = 0.52;
+    thigh.position.set(0, 0.04, 0.08);
+    thigh.castShadow = true;
+
+    // Shin angled downward from knee
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.044, 0.24, 4, 8), pants);
+    shin.rotation.x = -1.05;
+    shin.position.set(0, -0.14, 0.22);
+    shin.castShadow = true;
+
+    // Flight Boot at foot
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 0.18), bootMat);
+    boot.position.set(0, -0.28, 0.28);
+    boot.rotation.x = 0.2;
+    boot.castShadow = true;
+
+    legRoot.add(thigh, shin, boot);
+    return legRoot;
   };
-  makeLeg(-1);
-  makeLeg(1);
 
-  const seat = mesh(new THREE.BoxGeometry(0.26, 0.035, 0.22), carbon, group, [0, 0.07, 0.18]);
-  seat.rotation.x = 0.18;
-  const backPad = mesh(new THREE.BoxGeometry(0.22, 0.28, 0.05), carbon, torso, [0, 0.22, -0.1]);
-  backPad.rotation.x = -0.08;
-  mesh(new THREE.BoxGeometry(0.26, 0.028, 0.04), webbing, torso, [0, 0.26, 0.1], [0.15, 0, 0]);
-  mesh(new THREE.BoxGeometry(0.038, 0.03, 0.046), buckle, torso, [0, 0.26, 0.124]);
-  mesh(new THREE.BoxGeometry(0.03, 0.16, 0.016), webbing, torso, [-0.11, 0.16, 0.02], [0.1, 0, 0.32]);
-  mesh(new THREE.BoxGeometry(0.03, 0.16, 0.016), webbing, torso, [0.11, 0.16, 0.02], [0.1, 0, -0.32]);
-  mesh(new THREE.TorusGeometry(0.055, 0.01, 6, 12), webbing, group, [-0.07, 0.1, 0.42], [1.2, 0, 0]);
-  mesh(new THREE.TorusGeometry(0.055, 0.01, 6, 12), webbing, group, [0.07, 0.1, 0.42], [1.2, 0, 0]);
+  const legL = makeLeg(-1);
+  const legR = makeLeg(1);
+  legs.add(legL, legR);
 
-  const leftRiser = new THREE.Group();
-  leftRiser.name = 'LeftRiser';
-  leftRiser.position.set(-0.13, 0.24, 0.06);
-  const rightRiser = new THREE.Group();
-  rightRiser.name = 'RightRiser';
-  rightRiser.position.set(0.13, 0.24, 0.06);
-  const hang = (parent: THREE.Object3D): void => {
-    mesh(
-      new THREE.TorusGeometry(0.026, 0.007, 8, 14),
-      new THREE.MeshStandardMaterial({ color: 0xc5ccd2, metalness: 0.88, roughness: 0.2, fog: false }),
-      parent,
-      [0, 0, 0],
-      [Math.PI / 2, 0, 0],
-    );
-    mesh(new THREE.BoxGeometry(0.01, 0.006, 0.022), buckle, parent, [0, 0, 0.024]);
-  };
-  hang(leftRiser);
-  hang(rightRiser);
-  torso.add(leftRiser, rightRiser);
+  // Carabiners and Main Risers
+  const leftRiser = new THREE.Object3D();
+  leftRiser.position.set(-0.35, 0.58, 0.04);
+  const rightRiser = new THREE.Object3D();
+  rightRiser.position.set(0.35, 0.58, 0.04);
 
-  const rimFill = new THREE.PointLight(0xb8d6ff, 0.45, 2.4, 1.4);
-  rimFill.position.set(0, 0.55, 0.38);
-  group.add(rimFill);
+  group.add(harnessBucket, seatBottom, torso, legs, leftRiser, rightRiser);
 
   return {
     group,
     torso,
     headShell,
     eye,
-    leftArm: left.root,
-    rightArm: right.root,
-    leftForearm: left.forearm,
-    rightForearm: right.forearm,
-    leftHand: left.hand,
-    rightHand: right.hand,
+    leftArm: leftArmData.armRoot,
+    rightArm: rightArmData.armRoot,
+    leftHand: leftArmData.hand,
+    rightHand: rightArmData.hand,
+    leftToggle: leftArmData.toggle,
+    rightToggle: rightArmData.toggle,
+    legs,
     leftRiser,
     rightRiser,
-    restTorsoX: 0.32,
-    restArmX: 0.12,
-    restForearmX: -1.78,
+    restTorsoX: 0.22,
+    restArmX: 0.45,
   };
 }
 
@@ -498,85 +544,53 @@ export function poseGlider(
   dt: number,
 ): void {
   const pilot = visual.root.userData.pilot as PilotRig;
-  visual.root.rotation.set(flight.pitch * 0.22, flight.heading, 0);
-  visual.canopy.rotation.z = damp(visual.canopy.rotation.z, -flight.bank * 0.38, 6, dt);
-  visual.canopy.rotation.x = flight.pitch * 0.12;
 
-  const lean = THREE.MathUtils.clamp(steer, -1, 1);
-  const flare = flight.flare ? 1 : 0;
-  const dive = THREE.MathUtils.smoothstep(flight.pitch, 0.12, 0.45);
-  const restTorsoX = pilot.restTorsoX ?? 0;
-  const restForearmX = pilot.restForearmX ?? -1.82;
-  pilot.torso.rotation.z = damp(pilot.torso.rotation.z, lean * 0.4, 7, dt);
-  pilot.torso.rotation.x = damp(pilot.torso.rotation.x, restTorsoX + dive * 0.22 - flare * 0.05, 6, dt);
-  pilot.headShell.rotation.z = damp(pilot.headShell.rotation.z, lean * 0.16, 8, dt);
-  const leftBrake = Math.max(0, lean) + flare;
-  const rightBrake = Math.max(0, -lean) + flare;
-  if (pilot.leftForearm && pilot.rightForearm) {
-    pilot.leftForearm.rotation.x = damp(pilot.leftForearm.rotation.x, restForearmX + leftBrake * 0.85, 8, dt);
-    pilot.rightForearm.rotation.x = damp(pilot.rightForearm.rotation.x, restForearmX + rightBrake * 0.85, 8, dt);
-  } else {
-    const restArmX = pilot.restArmX ?? -1.05;
-    pilot.leftArm.rotation.x = damp(pilot.leftArm.rotation.x, restArmX + leftBrake * 0.85, 8, dt);
-    pilot.rightArm.rotation.x = damp(pilot.rightArm.rotation.x, restArmX + rightBrake * 0.85, 8, dt);
+  // 1. Overall Flight Orientation (Pitch + Heading)
+  visual.root.rotation.set(flight.pitch * 0.42, flight.heading, 0);
+
+  // 2. Canopy Roll & Pitch (Canopy leads the bank)
+  visual.canopy.rotation.z = damp(visual.canopy.rotation.z, -flight.bank * 0.45, 7.5, dt);
+  visual.canopy.rotation.x = damp(visual.canopy.rotation.x, flight.pitch * 0.18, 6.5, dt);
+
+  // 3. Pilot Harness Pendulum Dynamics (Harness swings beneath canopy)
+  pilot.group.rotation.z = damp(pilot.group.rotation.z, flight.harnessRoll, 8.5, dt);
+  pilot.group.rotation.x = damp(pilot.group.rotation.x, flight.harnessPitch, 8.0, dt);
+
+  // 4. Pilot Body Posture & Weight Shift
+  const weightShift = THREE.MathUtils.clamp(flight.weightShift + steer * 0.5, -1, 1);
+  pilot.torso.rotation.z = damp(pilot.torso.rotation.z, weightShift * 0.38, 8, dt);
+  pilot.torso.rotation.x = damp(
+    pilot.torso.rotation.x,
+    pilot.restTorsoX + (flight.pitch > 0 ? flight.pitch * 0.25 : flight.flare ? -0.12 : 0),
+    6.5,
+    dt,
+  );
+
+  // Head tracks ahead into the turn
+  pilot.headShell.rotation.z = damp(pilot.headShell.rotation.z, weightShift * 0.25, 9, dt);
+  pilot.headShell.rotation.y = damp(pilot.headShell.rotation.y, weightShift * 0.18, 8, dt);
+
+  // 5. Interactive Pilot Arms & Brake Toggles
+  // Raising hands up = full speed glide; Pulling hands down = brake / steer / flare
+  const leftPull = flight.leftBrake + (flight.flare ? 0.4 : 0);
+  const rightPull = flight.rightBrake + (flight.flare ? 0.4 : 0);
+
+  // When pulling brake, arm moves from high rest (0.45) downward towards waist (-0.6)
+  pilot.leftArm.rotation.x = damp(pilot.leftArm.rotation.x, pilot.restArmX - leftPull * 1.15, 12, dt);
+  pilot.rightArm.rotation.x = damp(pilot.rightArm.rotation.x, pilot.restArmX - rightPull * 1.15, 12, dt);
+
+  // Speed bar pushes legs slightly forward
+  if (pilot.legs) {
+    const legExtend = flight.speedBar * 0.14;
+    pilot.legs.position.z = damp(pilot.legs.position.z, legExtend, 8, dt);
   }
 
-  if (!visual.root.userData.blenderCanopy) {
-    deformCanopy(visual, flight, leftBrake, rightBrake, time);
-  }
-  updateLines(visual, pilot);
-}
+  // 6. Dynamic Canopy Deformation (Trailing edge flare & turbulence cloth flutter)
+  deformCanopy(visual, flight, leftPull, rightPull, time);
 
-function prepareStudioMesh(obj: THREE.Object3D): THREE.Mesh | null {
-  let first: THREE.Mesh | null = null;
-  obj.traverse((child) => {
-    if (child.name === 'CascadeLines') {
-      child.visible = false;
-      return;
-    }
-    const mesh = child as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    mesh.castShadow = true;
-    mesh.receiveShadow = false;
-    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    for (const raw of mats) {
-      const mat = raw as THREE.MeshStandardMaterial;
-      if (!mat?.isMeshStandardMaterial) continue;
-      mat.side = THREE.DoubleSide;
-      mat.shadowSide = THREE.DoubleSide;
-      mat.fog = false;
-      if (mesh.name.toLowerCase().includes('canopy') || mesh.parent?.name === 'Canopy') {
-        mat.emissive = new THREE.Color(0x3a0a12);
-        mat.emissiveIntensity = 0.1;
-      }
-    }
-    if (!first) first = mesh;
-  });
-  return first;
-}
-
-export async function attachStudioCanopy(visual: GliderVisual): Promise<boolean> {
-  try {
-    const gltf = await new GLTFLoader().loadAsync('/models/canopy.glb');
-    const src = gltf.scene.getObjectByName('Canopy') ?? gltf.scene;
-    if (!prepareStudioMesh(src)) return false;
-    visual.wing.visible = false;
-    src.position.set(0, 0, 0);
-    visual.canopy.add(src);
-    visual.root.userData.blenderCanopy = true;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function attachStudioPilot(_visual: GliderVisual): Promise<boolean> {
-  // Live rig (sleeves, high brake hands, chest carabiners) stays procedural.
-  return false;
-}
-
-export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
-  await attachStudioCanopy(visual);
+  // 7. Dynamic Suspension & Brake Lines
+  updateSuspensionLines(visual, pilot);
+  updateBrakeLines(visual, pilot);
 }
 
 function deformCanopy(
@@ -589,89 +603,106 @@ function deformCanopy(
   const pos = visual.wing.geometry.getAttribute('position') as THREE.BufferAttribute;
   const rest = visual.root.userData.rest as Float32Array;
   const half = SPAN * 0.5;
-  const ripple = flight.inThermal || flight.inDowndraft ? 0.018 : flight.speed > 18 ? 0.01 : 0;
+
+  const ripple = flight.inThermal || flight.inDowndraft ? 0.022 : flight.speed > 16 ? 0.012 : 0.005;
+  const bigEarsEffect = flight.bigEars ? 0.45 : 0;
+
   for (let i = 0; i < pos.count; i++) {
     const rx = rest[i * 3];
     const ry = rest[i * 3 + 1];
     const rz = rest[i * 3 + 2];
-    const spanT = rx / half;
+    const spanT = rx / half; // -1 (left) to +1 (right)
     const v = THREE.MathUtils.clamp((rz + 0.22 * CHORD) / CHORD, 0, 1);
-    let y = ry - flight.bank * 0.12 * spanT * v;
-    if (v > 0.68) {
-      const pull = (v - 0.68) / 0.32;
-      y -= leftBrake * Math.max(0, -spanT) * 0.22 * pull;
-      y -= rightBrake * Math.max(0, spanT) * 0.22 * pull;
+
+    let y = ry;
+
+    // Dynamic Trailing-Edge Brake Deflection
+    if (v > 0.65) {
+      const brakeWeight = (v - 0.65) / 0.35;
+      const pull = spanT < 0 ? leftBrake : rightBrake;
+      const spanInfluence = Math.abs(spanT);
+      y -= pull * brakeWeight * (0.28 + 0.32 * spanInfluence);
     }
-    if (ripple > 0) y += Math.sin(time * 14 + rx * 2.1 + rz * 2.8) * ripple;
+
+    // Big ears: fold the outer 20% of wingtips down
+    if (Math.abs(spanT) > 0.8 && bigEarsEffect > 0) {
+      const earWeight = (Math.abs(spanT) - 0.8) / 0.2;
+      y -= bigEarsEffect * earWeight;
+    }
+
+    // High-speed cloth flutter
+    y += Math.sin(time * 18 + rx * 2.5 + rz * 3.0) * ripple;
+
     pos.setXYZ(i, rx, y, rz);
   }
   pos.needsUpdate = true;
   visual.wing.geometry.computeVertexNormals();
 }
 
-function fitStrap(mesh: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3): void {
-  _mid.addVectors(from, to).multiplyScalar(0.5);
-  _c.subVectors(to, from);
-  const len = Math.max(_c.length(), 0.04);
-  _c.multiplyScalar(1 / len);
-  mesh.position.copy(_mid);
-  mesh.scale.set(1, 1, len);
-  if (_c.dot(_fwd) < -0.999) mesh.quaternion.set(0, 1, 0, 0);
-  else mesh.quaternion.setFromUnitVectors(_fwd, _c);
-}
-
-function updateLines(visual: GliderVisual, pilot: PilotRig): void {
-  const binds = visual.wing.userData.binds as LineBind[];
-  const pos = visual.wing.geometry.getAttribute('position') as THREE.BufferAttribute;
+function updateSuspensionLines(visual: GliderVisual, pilot: PilotRig): void {
+  const binds = visual.root.userData.binds as LineBind[];
   const linePos = visual.lines.geometry.getAttribute('position') as THREE.BufferAttribute;
-  const straps = visual.root.userData.straps as THREE.Group | undefined;
-  visual.canopy.updateWorldMatrix(true, false);
-  visual.root.updateWorldMatrix(true, false);
-  pilot.leftRiser.updateWorldMatrix(true, true);
-  pilot.rightRiser.updateWorldMatrix(true, true);
-  if (pilot.leftHand) pilot.leftHand.updateWorldMatrix(true, true);
-  if (pilot.rightHand) pilot.rightHand.updateWorldMatrix(true, true);
+  const pos = visual.wing.geometry.getAttribute('position') as THREE.BufferAttribute;
 
-  const leftCarab = _d;
-  const rightCarab = new THREE.Vector3();
-  pilot.leftRiser.getWorldPosition(leftCarab);
-  visual.root.worldToLocal(leftCarab);
-  pilot.rightRiser.getWorldPosition(rightCarab);
-  visual.root.worldToLocal(rightCarab);
-
-  const gathers: THREE.Vector3[][] = [[], []];
-  for (let g = 0; g < GALLERIES; g++) {
-    const off = GATHER_LOCAL[g];
-    gathers[0].push(new THREE.Vector3(leftCarab.x - 0.07, leftCarab.y + off.y, leftCarab.z + off.z));
-    gathers[1].push(new THREE.Vector3(rightCarab.x + 0.07, rightCarab.y + off.y, rightCarab.z + off.z));
-  }
-
-  let seg = 0;
-  for (const bind of binds) {
+  for (let i = 0; i < binds.length; i++) {
+    const bind = binds[i];
     _a.set(pos.getX(bind.vert), pos.getY(bind.vert), pos.getZ(bind.vert));
     visual.canopy.localToWorld(_a);
     visual.root.worldToLocal(_a);
-    if (bind.kind === 'brake' && pilot.leftHand && pilot.rightHand) {
-      const hand = bind.side === 'L' ? pilot.leftHand : pilot.rightHand;
-      hand.getWorldPosition(_b);
-      visual.root.worldToLocal(_b);
-    } else {
-      const sideIdx = bind.side === 'L' ? 0 : 1;
-      _b.copy(gathers[sideIdx][bind.gallery] ?? gathers[sideIdx][0]);
-    }
-    linePos.setXYZ(seg * 2, _a.x, _a.y, _a.z);
-    linePos.setXYZ(seg * 2 + 1, _b.x, _b.y, _b.z);
-    seg += 1;
+
+    // Anchor to corresponding left or right riser maillon above pilot shoulders
+    const riser = bind.side === 'L' ? pilot.leftRiser : pilot.rightRiser;
+    riser.getWorldPosition(_b);
+    visual.root.worldToLocal(_b);
+
+    linePos.setXYZ(i * 2, _a.x, _a.y, _a.z);
+    linePos.setXYZ(i * 2 + 1, _b.x, _b.y, _b.z);
   }
   linePos.needsUpdate = true;
+}
 
-  if (straps) {
-    for (let side = 0; side < 2; side++) {
-      const carab = side === 0 ? leftCarab : rightCarab;
-      for (let g = 0; g < GALLERIES; g++) {
-        const strap = straps.children[side * GALLERIES + g];
-        if (strap) fitStrap(strap, gathers[side][g], carab);
-      }
+function updateBrakeLines(visual: GliderVisual, pilot: PilotRig): void {
+  const brakeBinds = visual.root.userData.brakeBinds as LineBind[];
+  const linePos = visual.brakeLines.geometry.getAttribute('position') as THREE.BufferAttribute;
+  const pos = visual.wing.geometry.getAttribute('position') as THREE.BufferAttribute;
+
+  for (let i = 0; i < brakeBinds.length; i++) {
+    const bind = brakeBinds[i];
+    _a.set(pos.getX(bind.vert), pos.getY(bind.vert), pos.getZ(bind.vert));
+    visual.canopy.localToWorld(_a);
+    visual.root.worldToLocal(_a);
+
+    // Connect trailing edge brake fan directly to the pilot's left or right hand toggle
+    const hand = bind.side === 'L' ? pilot.leftHand : pilot.rightHand;
+    hand.getWorldPosition(_b);
+    visual.root.worldToLocal(_b);
+
+    linePos.setXYZ(i * 2, _a.x, _a.y, _a.z);
+    linePos.setXYZ(i * 2 + 1, _b.x, _b.y, _b.z);
+  }
+  linePos.needsUpdate = true;
+}
+
+export async function attachStudioAssets(_visual: GliderVisual): Promise<void> {
+  try {
+    const loader = new GLTFLoader();
+    const gltf = await loader.loadAsync('/models/paraglider.glb');
+    if (gltf && gltf.scene) {
+      const model = gltf.scene;
+      model.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (mesh.isMesh && mesh.material) {
+          mesh.castShadow = true;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mats.forEach((m) => {
+            if (m && 'fog' in m) {
+              (m as THREE.MeshStandardMaterial).fog = true;
+            }
+          });
+        }
+      });
     }
+  } catch {
+    // Falls back cleanly to procedural high-fidelity canopy & pilot rig
   }
 }

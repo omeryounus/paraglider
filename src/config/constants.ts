@@ -20,3 +20,10 @@ export const WORLD_SIZE = 1600;
 export const RING_SCORE = { green: 500, gold: 1500, boost: 1000 } as const;
 export const LANDING_SCORE = { bullseye: 5000, mid: 2500, outer: 1000 } as const;
 export const STORAGE_KEY = 'aero-glide-progress';
+
+// Paraglider 3D Geometry Constants
+export const SPAN = 9.23;
+export const CHORD = 2.28;
+export const CANOPY_Y = 3.2;
+export const SEGS_X = 24;
+export const SEGS_Z = 16;

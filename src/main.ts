@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CRASH_SINK, LANDING_AGL, MISS_TIME_PENALTY, NEAR_MISS_MAX } from './config/constants';
 import { getLevel, LEVELS } from './config/levels';
+import { audio } from './game/audio';
 import { createAtmosphere, type Atmosphere } from './game/atmosphere';
 import { bindLookControls, resetLook, snapCamera, stepCamera, zoomLook } from './game/camera';
 import {
@@ -126,6 +127,9 @@ function clearWorld(): void {
 }
 
 async function startLevel(id: LevelId): Promise<void> {
+  audio.init();
+  audio.resume();
+
   session.phase = 'load';
   showSelect(menus, false);
   hideResults(menus);
@@ -194,6 +198,7 @@ function handleLanding(): void {
   const gentle = Math.abs(flight.verticalSpeed) < CRASH_SINK;
   if (band && gentle) {
     awardLanding(score, band, soft);
+    audio.playLandingSound(soft);
     popups.push(
       spawnPopup(
         popupHost,
@@ -205,12 +210,16 @@ function handleLanding(): void {
     finish('clear');
     return;
   }
+  audio.playLandingSound(false);
   finish('crash');
 }
 
 function tickPlay(dt: number): void {
   if (!terrain || !course || !atmo) return;
   const pos = glider.root.position;
+
+  // Poll Gamepad input
+  input.pollGamepad();
 
   if (session.phase === 'countdown') {
     session.countdown -= dt;
@@ -254,8 +263,12 @@ function tickPlay(dt: number): void {
     const event = updateCourse(course, pos, clock.elapsedTime);
     if (event.kind === 'ring' && event.ring) {
       const pts = awardRing(score, event.ring.type);
+      audio.playRingSound(event.ring.type);
       if (event.ring.type === 'gold') grantBoost(flight, 34);
-      if (event.ring.type === 'boost') triggerSpeedRing(flight);
+      if (event.ring.type === 'boost') {
+        triggerSpeedRing(flight);
+        audio.playBoostSound();
+      }
       popups.push(spawnPopup(popupHost, event.ring.position, event.popup ?? `+${pts}`, event.color ?? '#fff'));
     } else if (event.kind === 'miss') {
       missRing(score);
@@ -264,11 +277,15 @@ function tickPlay(dt: number): void {
     } else if (event.kind === 'orb') {
       const pts = awardOrb(score);
       grantBoost(flight, 18);
+      audio.playRingSound('gold');
       popups.push(spawnPopup(popupHost, pos, `+${pts}`, '#7cf0ff'));
     }
 
     if (flight.agl <= LANDING_AGL + 0.05) handleLanding();
   }
+
+  // Update audio dynamically with airspeed & variometer climb/sink
+  audio.update(flight.speed, flight.verticalSpeed, session.phase === 'flying');
 
   poseGlider(glider, flight, input.state.steer, clock.elapsedTime, dt);
   const nxt = nextRing(course);
@@ -322,24 +339,51 @@ function bindCamRig(): void {
   reset?.addEventListener('click', () => resetLook());
 }
 
+function bindAudioToggle(): void {
+  const btn = document.querySelector<HTMLButtonElement>('#btn-audio-mute');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const isMuted = audio.toggleMute();
+    btn.textContent = isMuted ? '🔇' : '🔊';
+  });
+}
+
 function boot(): void {
   input.bind();
-  bindTouch(input.setTouch, input.toggleFpv);
+  bindTouch(input.setTouch, input.toggleFpv, input.toggleGyro);
   bindCamRig();
+  bindAudioToggle();
   bindLookControls(renderer.domElement, () =>
     session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'results',
   );
+
+  // Resume audio context on first user interaction anywhere
+  const unlockAudio = (): void => {
+    audio.init();
+    audio.resume();
+    window.removeEventListener('pointerdown', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+  };
+  window.addEventListener('pointerdown', unlockAudio);
+  window.addEventListener('keydown', unlockAudio);
+
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
     resizeComposer(composer, renderer);
   });
+
   window.addEventListener('keydown', (event) => {
     const key = event.key.toLowerCase();
     const live = session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'results';
     if (key === 'r' && (session.phase === 'flying' || session.phase === 'results')) {
       void startLevel(level.id);
+    }
+    if (key === 'm' && !event.repeat) {
+      const isMuted = audio.toggleMute();
+      const btn = document.querySelector<HTMLButtonElement>('#btn-audio-mute');
+      if (btn) btn.textContent = isMuted ? '🔇' : '🔊';
     }
     if (key === 'escape') openMenu();
     if (!live) return;
@@ -347,6 +391,7 @@ function boot(): void {
     if (key === '-' || key === '_') zoomLook(1);
     if (key === 'home' || key === '0') resetLook();
   });
+
   renderLevelSelect(menus, progress, (id) => void startLevel(id));
   showSelect(menus, true);
   setLoader(menus, 'Choose a canyon', true);
