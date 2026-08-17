@@ -23,7 +23,7 @@ export const BIOME_SPLAT: Record<LevelId, BiomeSplat> = {
     scree: new THREE.Vector3(0.4, 0.37, 0.3),
     snow: new THREE.Vector3(0.74, 0.78, 0.82),
     snowHeight: 350,
-    grassScale: 0.11,
+    grassScale: 0.048,
     grassMax: 30,
     rockMin: 35,
     beachMin: -999,
@@ -62,7 +62,7 @@ export const BIOME_SPLAT: Record<LevelId, BiomeSplat> = {
     scree: new THREE.Vector3(0.48, 0.42, 0.32),
     snow: new THREE.Vector3(0.76, 0.76, 0.74),
     snowHeight: 380,
-    grassScale: 0.1,
+    grassScale: 0.046,
     grassMax: 28,
     rockMin: 33,
     beachMin: -999,
@@ -288,37 +288,43 @@ export function createSplatMaterial(biome: LevelId, extent = 1600): THREE.MeshSt
       .replace(
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>
-        normal = normalize(mat3(viewMatrix) * splatWorldNormal(tw, normalize(vWn)));`,
+        {
+          vec3 geoN = normalize(vWn);
+          vec3 splN = splatWorldNormal(tw, geoN);
+          normal = normalize(mat3(viewMatrix) * normalize(mix(geoN, splN, 0.48)));
+        }`,
       );
   };
-  mat.customProgramCacheKey = () => `terrain-splat-v9-${biome}`;
+  mat.customProgramCacheKey = () => `terrain-splat-v10-${biome}`;
   return mat;
 }
 
-export function ensureUpNormals(geo: THREE.BufferGeometry): void {
+export function ensureUpNormals(geo: THREE.BufferGeometry, _weld = true): void {
+  geo.deleteAttribute('normal');
   geo.computeVertexNormals();
   const nrm = geo.getAttribute('normal');
   if (!nrm || nrm.count === 0) return;
   let sumY = 0;
   for (let i = 0; i < nrm.count; i++) sumY += nrm.getY(i);
-  if (sumY / nrm.count >= 0) return;
-  const idx = geo.getIndex();
-  if (idx) {
-    for (let i = 0; i < idx.count; i += 3) {
-      const b = idx.getX(i + 1);
-      const c = idx.getX(i + 2);
-      idx.setX(i + 1, c);
-      idx.setX(i + 2, b);
+  if (sumY / nrm.count < 0) {
+    const idx = geo.getIndex();
+    if (idx) {
+      for (let i = 0; i < idx.count; i += 3) {
+        const b = idx.getX(i + 1);
+        const c = idx.getX(i + 2);
+        idx.setX(i + 1, c);
+        idx.setX(i + 2, b);
+      }
+      idx.needsUpdate = true;
     }
-    idx.needsUpdate = true;
+    geo.computeVertexNormals();
   }
-  geo.computeVertexNormals();
 }
 
 export function tessellateOnce(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   const pos = geo.attributes.position;
   const idx = geo.getIndex();
-  if (!pos || !idx || idx.count > 240000) {
+  if (!pos || !idx || idx.count > 80000 || pos.count > 22000) {
     geo.computeVertexNormals();
     return geo;
   }
@@ -380,7 +386,10 @@ export function smoothTerrainShading(root: THREE.Object3D): void {
   root.traverse((child) => {
     const mesh = child as THREE.Mesh;
     if (!mesh.isMesh || isScatterOrFx(mesh)) return;
-    if (mesh.geometry) ensureUpNormals(mesh.geometry);
+    if (mesh.geometry) {
+      mesh.geometry.deleteAttribute('normal');
+      ensureUpNormals(mesh.geometry);
+    }
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     mats.forEach((mat) => {
       if (!mat) return;
@@ -403,12 +412,7 @@ export function applyTerrainSplat(root: THREE.Object3D, biome: LevelId, extent =
     mesh.castShadow = false;
     mesh.receiveShadow = true;
     if (mesh.geometry) {
-      const next = tessellateOnce(mesh.geometry);
-      if (next !== mesh.geometry) {
-        mesh.geometry.dispose();
-        mesh.geometry = next;
-      }
-      ensureUpNormals(mesh.geometry);
+      ensureUpNormals(mesh.geometry, true);
     }
     const prev = mesh.material;
     mesh.material = splat;
