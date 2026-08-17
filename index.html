@@ -59,17 +59,17 @@
           <span class="dial-label">Thermal Energy / Boost</span>
           <div class="boost-track"><div id="hud-boost"></div></div>
         </div>
-        <div class="hud-row">
+        <div class="hud-row hud-flight">
           <div><span class="dial-label">Rings</span><b id="hud-rings">0/0</b></div>
           <div><span class="dial-label">Airspeed</span><b id="hud-spd">000</b><small>km/h</small></div>
           <div><span class="dial-label">AGL</span><b id="hud-agl">000</b><small>m</small></div>
+          <div><span class="dial-label">Vario</span><b id="hud-vario">+0.0</b><small>m/s</small></div>
           <div class="compass-wrap">
             <div id="hud-compass">▲</div>
           </div>
         </div>
         <div class="hud-row instruments">
           <div><span class="dial-label">ASL</span><b id="hud-asl">000</b><small>m</small></div>
-          <div><span class="dial-label">Vario</span><b id="hud-vario">+0.0</b><small>m/s</small></div>
           <div><span class="dial-label">L/D Glide</span><b id="hud-glide">10.5</b></div>
         </div>
         <div class="hud-controls-bar">
@@ -77,8 +77,10 @@
             <span class="dial-label">Biome</span>
             <select id="hud-biome"></select>
           </label>
-          <button type="button" id="btn-audio-mute" class="hud-btn" title="Toggle Sound">🔊</button>
-          <button type="button" id="btn-pause" class="hud-btn" title="Pause">❚❚</button>
+          <div class="hud-fabs">
+            <button type="button" id="btn-audio-mute" class="hud-btn" title="Toggle Sound">🔊</button>
+            <button type="button" id="btn-pause" class="hud-btn" title="Pause">❚❚</button>
+          </div>
         </div>
         <div id="hud-hint">Fly through the next glowing ring</div>
         <div id="coach" hidden></div>
