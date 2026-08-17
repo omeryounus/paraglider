@@ -410,7 +410,7 @@ function makeHeroOpaque(mat: THREE.Material): void {
   mat.alphaTest = 0;
   mat.alphaHash = false;
   mat.forceSinglePass = false;
-  mat.side = THREE.FrontSide;
+  mat.side = THREE.DoubleSide;
   mat.shadowSide = THREE.FrontSide;
   mat.colorWrite = true;
   const std = mat as THREE.MeshStandardMaterial;
@@ -440,7 +440,7 @@ function makeHeroOpaque(mat: THREE.Material): void {
         gl_FragColor.a = 1.0;`,
         );
     };
-    std.customProgramCacheKey = () => 'hero-opaque-v2';
+    std.customProgramCacheKey = () => 'hero-opaque-v3';
   }
   const phys = mat as THREE.MeshPhysicalMaterial;
   if (phys.isMeshPhysicalMaterial) {
@@ -996,33 +996,61 @@ function prepMaps(mat: THREE.MeshStandardMaterial, mipmaps = true): void {
   }
 }
 
-function flipInwardFaces(geo: THREE.BufferGeometry): void {
+/** Drop Hyper3D capture cards: tall, thin, camera-facing sheets welded into the person. */
+function stripBillboardCards(geo: THREE.BufferGeometry): void {
   const idx = geo.getIndex();
   const pos = geo.getAttribute('position');
   if (!idx || !pos) return;
   if (!geo.boundingBox) geo.computeBoundingBox();
-  const center = geo.boundingBox!.getCenter(new THREE.Vector3());
+  const size = geo.boundingBox!.getSize(new THREE.Vector3());
+  const minH = size.y * 0.65;
+  const minW = size.x * 0.4;
   const a = new THREE.Vector3();
   const b = new THREE.Vector3();
   const c = new THREE.Vector3();
   const ab = new THREE.Vector3();
   const ac = new THREE.Vector3();
   const n = new THREE.Vector3();
-  const mid = new THREE.Vector3();
+  type Rec = { faces: number[]; minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
+  const buckets = new Map<string, Rec>();
   const arr = idx.array as Uint16Array | Uint32Array;
   for (let i = 0; i < arr.length; i += 3) {
     a.fromBufferAttribute(pos, arr[i]);
     b.fromBufferAttribute(pos, arr[i + 1]);
     c.fromBufferAttribute(pos, arr[i + 2]);
-    n.copy(ab.subVectors(b, a).cross(ac.subVectors(c, a)));
-    mid.copy(a).add(b).add(c).multiplyScalar(1 / 3).sub(center);
-    if (n.dot(mid) < 0) {
-      const tmp = arr[i + 1];
-      arr[i + 1] = arr[i + 2];
-      arr[i + 2] = tmp;
+    n.copy(ab.subVectors(b, a).cross(ac.subVectors(c, a))).normalize();
+    if (Math.abs(n.z) < 0.88) continue;
+    const z = (a.z + b.z + c.z) / 3;
+    const key = `${Math.round(z * 20) / 20}:${n.z > 0 ? '+' : '-'}`;
+    let rec = buckets.get(key);
+    if (!rec) {
+      rec = { faces: [], minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+      buckets.set(key, rec);
+    }
+    rec.faces.push(i);
+    rec.minX = Math.min(rec.minX, a.x, b.x, c.x);
+    rec.maxX = Math.max(rec.maxX, a.x, b.x, c.x);
+    rec.minY = Math.min(rec.minY, a.y, b.y, c.y);
+    rec.maxY = Math.max(rec.maxY, a.y, b.y, c.y);
+    rec.minZ = Math.min(rec.minZ, a.z, b.z, c.z);
+    rec.maxZ = Math.max(rec.maxZ, a.z, b.z, c.z);
+  }
+  const drop = new Set<number>();
+  for (const rec of buckets.values()) {
+    const thin = rec.maxZ - rec.minZ < Math.max(0.09, size.z * 0.09);
+    const tall = rec.maxY - rec.minY >= minH;
+    const wide = rec.maxX - rec.minX >= minW;
+    if (thin && tall && wide && rec.faces.length > 80) {
+      for (const face of rec.faces) drop.add(face);
     }
   }
-  idx.needsUpdate = true;
+  if (drop.size === 0) return;
+  const next: number[] = [];
+  for (let i = 0; i < arr.length; i += 3) {
+    if (drop.has(i)) continue;
+    next.push(arr[i], arr[i + 1], arr[i + 2]);
+  }
+  geo.setIndex(next);
   geo.computeVertexNormals();
 }
 
@@ -1064,7 +1092,7 @@ async function loadGlbScene(url: string, _doubleSide = false): Promise<THREE.Gro
           mat.depthTest = true;
           mat.alphaTest = 0;
           mat.fog = true;
-          mat.side = THREE.FrontSide;
+          mat.side = THREE.DoubleSide;
           mat.shadowSide = THREE.FrontSide;
           mat.forceSinglePass = false;
           prepMaps(mat, false);
@@ -1113,6 +1141,9 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
         mat.transparent = false;
         mat.opacity = 1;
         mat.alphaTest = 0;
+        mat.depthWrite = true;
+        mat.side = THREE.DoubleSide;
+        mat.forceSinglePass = false;
         mat.roughness = 0.55;
         mat.metalness = 0;
         mat.metalnessMap = null;
@@ -1158,7 +1189,7 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
       if (!mesh.isMesh) return;
       mesh.renderOrder = 2;
       mesh.frustumCulled = false;
-      flipInwardFaces(mesh.geometry);
+      stripBillboardCards(mesh.geometry);
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const raw of mats) {
         makeHeroOpaque(raw);
