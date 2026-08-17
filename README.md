@@ -11,7 +11,7 @@ Each biome ships a Terrain Studio–style GLB in `public/terrains/`. If a file i
 
 | Level | Terrain Studio template | Flavor |
 | --- | --- | --- |
-| Alpine Slalom | Mountain Range | Tight canyon, speed-ring chains |
+| Alpine Glide | Mountain Range | Wide gates, first-flight valley line |
 | Coastal Run | Tropical Island | Water skimming, beach bullseye |
 | Dune Storm | Desert | Heavy thermals, wandering downdrafts |
 | Ridge Runner | Geological Hybrid | Terraced drops, gold-ring gaps |

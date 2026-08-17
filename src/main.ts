@@ -273,11 +273,12 @@ function tickPlay(dt: number): void {
     } else if (event.kind === 'miss') {
       missRing(score);
       session.timeLeft = Math.max(0, session.timeLeft - MISS_TIME_PENALTY);
+      audio.playMissSound();
       popups.push(spawnPopup(popupHost, pos, 'MISS −2s', '#ff5a4a'));
     } else if (event.kind === 'orb') {
       const pts = awardOrb(score);
       grantBoost(flight, 18);
-      audio.playRingSound('gold');
+      audio.playOrbSound();
       popups.push(spawnPopup(popupHost, pos, `+${pts}`, '#7cf0ff'));
     }
 
