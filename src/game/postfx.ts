@@ -14,7 +14,7 @@ export function createComposer(
   beauty.clearAlpha = 1;
   composer.addPass(beauty);
   composer.addPass(
-    new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.28, 0.2, 0.93),
+    new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.18, 0.32, 0.96),
   );
   composer.addPass(new OutputPass());
   composer.renderTarget1.texture.premultiplyAlpha = false;

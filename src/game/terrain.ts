@@ -295,7 +295,7 @@ function addGroundFill(scene: THREE.Scene, minY: number): void {
   );
   mesh.name = 'Ground_Fill';
   mesh.position.y = Math.min(minY - 8, -4);
-  mesh.receiveShadow = true;
+  mesh.receiveShadow = false;
   mesh.castShadow = false;
   mesh.frustumCulled = false;
   scene.add(mesh);

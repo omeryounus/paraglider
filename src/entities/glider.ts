@@ -409,8 +409,8 @@ function makeHeroOpaque(mat: THREE.Material): void {
   mat.depthTest = true;
   mat.alphaTest = 0;
   mat.alphaHash = false;
-  mat.forceSinglePass = true;
-  mat.side = THREE.DoubleSide;
+  mat.forceSinglePass = false;
+  mat.side = THREE.FrontSide;
   mat.shadowSide = THREE.FrontSide;
   mat.colorWrite = true;
   const std = mat as THREE.MeshStandardMaterial;
@@ -440,7 +440,7 @@ function makeHeroOpaque(mat: THREE.Material): void {
         gl_FragColor.a = 1.0;`,
         );
     };
-    std.customProgramCacheKey = () => 'hero-opaque-v1';
+    std.customProgramCacheKey = () => 'hero-opaque-v2';
   }
   const phys = mat as THREE.MeshPhysicalMaterial;
   if (phys.isMeshPhysicalMaterial) {
@@ -855,7 +855,7 @@ function deformStudioCanopy(
     if (Math.abs(spanT) > 0.78 && ears > 0) {
       y -= ears * ((Math.abs(spanT) - 0.78) / 0.22);
     }
-    y += Math.sin(time * 16 + rx * 2.2 + rz * 2.8) * ripple;
+    if (ripple > 0.01) y += Math.sin(time * 7 + rx * 2.2 + rz * 2.8) * ripple * 0.35;
     pos.setXYZ(i, rx, y, rz);
   }
   pos.needsUpdate = true;
@@ -976,7 +976,7 @@ function updateBrakeLines(visual: GliderVisual, pilot: PilotRig): void {
   linePos.needsUpdate = true;
 }
 
-function prepMaps(mat: THREE.MeshStandardMaterial): void {
+function prepMaps(mat: THREE.MeshStandardMaterial, mipmaps = true): void {
   const maps = [
     mat.map,
     mat.normalMap,
@@ -986,13 +986,44 @@ function prepMaps(mat: THREE.MeshStandardMaterial): void {
   ];
   for (const tex of maps) {
     if (!tex) continue;
-    tex.generateMipmaps = true;
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    // Hyper3D atlases sit on black padding — mipmaps pull that black into the silhouette.
+    tex.generateMipmaps = mipmaps;
+    tex.minFilter = mipmaps ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
-    tex.anisotropy = 8;
+    tex.anisotropy = mipmaps ? 8 : 1;
     if (tex === mat.map) tex.colorSpace = THREE.SRGBColorSpace;
     tex.needsUpdate = true;
   }
+}
+
+function flipInwardFaces(geo: THREE.BufferGeometry): void {
+  const idx = geo.getIndex();
+  const pos = geo.getAttribute('position');
+  if (!idx || !pos) return;
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  const center = geo.boundingBox!.getCenter(new THREE.Vector3());
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const ab = new THREE.Vector3();
+  const ac = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const mid = new THREE.Vector3();
+  const arr = idx.array as Uint16Array | Uint32Array;
+  for (let i = 0; i < arr.length; i += 3) {
+    a.fromBufferAttribute(pos, arr[i]);
+    b.fromBufferAttribute(pos, arr[i + 1]);
+    c.fromBufferAttribute(pos, arr[i + 2]);
+    n.copy(ab.subVectors(b, a).cross(ac.subVectors(c, a)));
+    mid.copy(a).add(b).add(c).multiplyScalar(1 / 3).sub(center);
+    if (n.dot(mid) < 0) {
+      const tmp = arr[i + 1];
+      arr[i + 1] = arr[i + 2];
+      arr[i + 2] = tmp;
+    }
+  }
+  idx.needsUpdate = true;
+  geo.computeVertexNormals();
 }
 
 function isHelperMesh(mesh: THREE.Mesh): boolean {
@@ -1008,7 +1039,7 @@ function isHelperMesh(mesh: THREE.Mesh): boolean {
   return dims[0] < 0.02 && area > 0.15;
 }
 
-async function loadGlbScene(url: string, doubleSide = false): Promise<THREE.Group | null> {
+async function loadGlbScene(url: string, _doubleSide = false): Promise<THREE.Group | null> {
   try {
     const gltf = await new GLTFLoader().loadAsync(url);
     const scene = gltf.scene;
@@ -1022,6 +1053,7 @@ async function loadGlbScene(url: string, doubleSide = false): Promise<THREE.Grou
       }
       mesh.castShadow = true;
       mesh.receiveShadow = false;
+      mesh.frustumCulled = false;
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const raw of mats) {
         const mat = raw as THREE.MeshStandardMaterial;
@@ -1032,10 +1064,10 @@ async function loadGlbScene(url: string, doubleSide = false): Promise<THREE.Grou
           mat.depthTest = true;
           mat.alphaTest = 0;
           mat.fog = true;
-          mat.side = doubleSide ? THREE.DoubleSide : THREE.FrontSide;
+          mat.side = THREE.FrontSide;
           mat.shadowSide = THREE.FrontSide;
-          mat.forceSinglePass = true;
-          prepMaps(mat);
+          mat.forceSinglePass = false;
+          prepMaps(mat, false);
         }
       }
     });
@@ -1073,6 +1105,7 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
     parachute.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
+      mesh.frustumCulled = false;
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const raw of mats) {
         const mat = raw as THREE.MeshStandardMaterial;
@@ -1086,7 +1119,7 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
         mat.envMapIntensity = 0.15;
         mat.normalMap = fabric;
         mat.normalScale = new THREE.Vector2(0.32, 0.32);
-        prepMaps(mat);
+        prepMaps(mat, false);
         mat.needsUpdate = true;
       }
     });
@@ -1124,6 +1157,8 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
       mesh.renderOrder = 2;
+      mesh.frustumCulled = false;
+      flipInwardFaces(mesh.geometry);
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const raw of mats) {
         makeHeroOpaque(raw);
@@ -1134,7 +1169,7 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
         mat.metalnessMap = null;
         mat.roughnessMap = null;
         mat.envMapIntensity = 0.12;
-        prepMaps(mat);
+        prepMaps(mat, false);
         mat.needsUpdate = true;
       }
     });
