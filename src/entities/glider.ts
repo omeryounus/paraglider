@@ -395,8 +395,63 @@ function skin(color: number, rough = 0.65, metal = 0.06): THREE.MeshStandardMate
     transparent: false,
     opacity: 1,
     depthWrite: true,
-    fog: true,
+    depthTest: true,
+    fog: false,
+    forceSinglePass: true,
   });
+}
+
+/** Keep the close-up pilot a solid depth writer so fog/terrain cannot bleed through. */
+function makeHeroOpaque(mat: THREE.Material): void {
+  mat.transparent = false;
+  mat.opacity = 1;
+  mat.depthWrite = true;
+  mat.depthTest = true;
+  mat.alphaTest = 0;
+  mat.alphaHash = false;
+  mat.forceSinglePass = true;
+  mat.side = THREE.DoubleSide;
+  mat.shadowSide = THREE.FrontSide;
+  mat.colorWrite = true;
+  const std = mat as THREE.MeshStandardMaterial;
+  if (std.isMeshStandardMaterial) {
+    std.fog = false;
+    std.premultipliedAlpha = false;
+    std.alphaMap = null;
+    std.transparent = false;
+    std.opacity = 1;
+    std.polygonOffset = true;
+    std.polygonOffsetFactor = -1;
+    std.polygonOffsetUnits = -1;
+    const prev = std.onBeforeCompile.bind(std);
+    std.onBeforeCompile = (shader, renderer) => {
+      prev(shader, renderer);
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+        diffuseColor.a = 1.0;`,
+        )
+        .replace(
+          '#include <alphamap_fragment>',
+          `#include <alphamap_fragment>
+        diffuseColor.a = 1.0;`,
+        )
+        .replace(
+          '#include <opaque_fragment>',
+          `#include <opaque_fragment>
+        gl_FragColor.a = 1.0;`,
+        );
+    };
+    std.customProgramCacheKey = () => 'hero-opaque-v1';
+  }
+  const phys = mat as THREE.MeshPhysicalMaterial;
+  if (phys.isMeshPhysicalMaterial) {
+    phys.transmission = 0;
+    phys.thickness = 0;
+    phys.attenuationDistance = Infinity;
+  }
+  mat.needsUpdate = true;
 }
 
 let _ripstop: THREE.DataTexture | null = null;
@@ -508,7 +563,9 @@ function createPilot(): PilotRig {
       color: 0x14181f,
       roughness: 0.22,
       metalness: 0.45,
-      fog: true,
+      fog: false,
+      transparent: false,
+      depthWrite: true,
     }),
   );
   helmet.name = 'Helmet';
@@ -522,7 +579,9 @@ function createPilot(): PilotRig {
       color: 0x050c14,
       roughness: 0.06,
       metalness: 0.96,
-      fog: true,
+      fog: false,
+      transparent: false,
+      depthWrite: true,
     }),
   );
   visor.position.set(0, 0.0, 0.035);
@@ -970,9 +1029,15 @@ async function loadGlbScene(url: string, doubleSide = false): Promise<THREE.Grou
       for (const raw of mats) {
         const mat = raw as THREE.MeshStandardMaterial;
         if (mat?.isMeshStandardMaterial) {
+          mat.transparent = false;
+          mat.opacity = 1;
+          mat.depthWrite = true;
+          mat.depthTest = true;
+          mat.alphaTest = 0;
           mat.fog = true;
           mat.side = doubleSide ? THREE.DoubleSide : THREE.FrontSide;
           mat.shadowSide = THREE.FrontSide;
+          mat.forceSinglePass = true;
           prepMaps(mat);
         }
       }
@@ -1061,15 +1126,12 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
     person.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
+      mesh.renderOrder = 2;
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const raw of mats) {
+        makeHeroOpaque(raw);
         const mat = raw as THREE.MeshStandardMaterial;
         if (!mat?.isMeshStandardMaterial) continue;
-        mat.transparent = false;
-        mat.opacity = 1;
-        mat.alphaTest = 0;
-        mat.alphaHash = false;
-        mat.depthWrite = true;
         mat.roughness = 0.72;
         mat.metalness = 0;
         mat.metalnessMap = null;
