@@ -19,14 +19,16 @@ export interface GliderVisual {
 }
 
 interface PilotRig {
-  group: THREE.Group;
-  torso: THREE.Group;
-  headShell: THREE.Group;
+  group: THREE.Object3D;
+  torso: THREE.Object3D;
+  headShell: THREE.Object3D;
   eye: THREE.Object3D;
-  leftArm: THREE.Group;
-  rightArm: THREE.Group;
+  leftArm: THREE.Object3D;
+  rightArm: THREE.Object3D;
   leftRiser: THREE.Object3D;
   rightRiser: THREE.Object3D;
+  restTorsoX: number;
+  restArmX: number;
 }
 
 interface LineBind {
@@ -338,6 +340,8 @@ function createPilot(): PilotRig {
     rightArm,
     leftRiser,
     rightRiser,
+    restTorsoX: 0,
+    restArmX: -1.05,
   };
 }
 
@@ -356,13 +360,15 @@ export function poseGlider(
   const lean = THREE.MathUtils.clamp(steer, -1, 1);
   const flare = flight.flare ? 1 : 0;
   const dive = THREE.MathUtils.smoothstep(flight.pitch, 0.12, 0.45);
+  const restTorsoX = pilot.restTorsoX ?? 0;
+  const restArmX = pilot.restArmX ?? -1.05;
   pilot.torso.rotation.z = damp(pilot.torso.rotation.z, lean * 0.46, 7, dt);
-  pilot.torso.rotation.x = damp(pilot.torso.rotation.x, dive * 0.28 - flare * 0.06, 6, dt);
+  pilot.torso.rotation.x = damp(pilot.torso.rotation.x, restTorsoX + dive * 0.28 - flare * 0.06, 6, dt);
   pilot.headShell.rotation.z = damp(pilot.headShell.rotation.z, lean * 0.18, 8, dt);
   const leftBrake = Math.max(0, lean) + flare;
   const rightBrake = Math.max(0, -lean) + flare;
-  pilot.leftArm.rotation.x = damp(pilot.leftArm.rotation.x, -1.05 + leftBrake * 0.85, 8, dt);
-  pilot.rightArm.rotation.x = damp(pilot.rightArm.rotation.x, -1.05 + rightBrake * 0.85, 8, dt);
+  pilot.leftArm.rotation.x = damp(pilot.leftArm.rotation.x, restArmX + leftBrake * 0.85, 8, dt);
+  pilot.rightArm.rotation.x = damp(pilot.rightArm.rotation.x, restArmX + rightBrake * 0.85, 8, dt);
 
   if (!visual.root.userData.blenderCanopy) {
     deformCanopy(visual, flight, leftBrake, rightBrake, time);
@@ -370,27 +376,39 @@ export function poseGlider(
   updateLines(visual, pilot);
 }
 
+function prepareStudioMesh(obj: THREE.Object3D): THREE.Mesh | null {
+  let first: THREE.Mesh | null = null;
+  obj.traverse((child) => {
+    if (child.name === 'CascadeLines') {
+      child.visible = false;
+      return;
+    }
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = true;
+    mesh.receiveShadow = false;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const raw of mats) {
+      const mat = raw as THREE.MeshStandardMaterial;
+      if (!mat?.isMeshStandardMaterial) continue;
+      mat.side = THREE.DoubleSide;
+      mat.shadowSide = THREE.DoubleSide;
+      mat.fog = false;
+      if (mesh.name.toLowerCase().includes('canopy') || mesh.parent?.name === 'Canopy') {
+        mat.emissive = new THREE.Color(0x3a0a12);
+        mat.emissiveIntensity = 0.1;
+      }
+    }
+    if (!first) first = mesh;
+  });
+  return first;
+}
+
 export async function attachStudioCanopy(visual: GliderVisual): Promise<boolean> {
   try {
     const gltf = await new GLTFLoader().loadAsync('/models/canopy.glb');
     const src = gltf.scene.getObjectByName('Canopy') ?? gltf.scene;
-    let first: THREE.Mesh | null = null;
-    src.traverse((obj) => {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      mesh.castShadow = true;
-      mesh.receiveShadow = false;
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat?.isMeshStandardMaterial) {
-        mat.side = THREE.DoubleSide;
-        mat.shadowSide = THREE.DoubleSide;
-        mat.emissive = new THREE.Color(0x3a0a12);
-        mat.emissiveIntensity = 0.14;
-        mat.fog = false;
-      }
-      if (!first) first = mesh;
-    });
-    if (!first) return false;
+    if (!prepareStudioMesh(src)) return false;
     visual.wing.visible = false;
     src.position.set(0, 0, 0);
     visual.canopy.add(src);
@@ -399,6 +417,51 @@ export async function attachStudioCanopy(visual: GliderVisual): Promise<boolean>
   } catch {
     return false;
   }
+}
+
+export async function attachStudioPilot(visual: GliderVisual): Promise<boolean> {
+  try {
+    const gltf = await new GLTFLoader().loadAsync('/models/pilot.glb');
+    const src = gltf.scene.getObjectByName('Pilot') ?? gltf.scene;
+    if (!prepareStudioMesh(src)) return false;
+    const torso = src.getObjectByName('Torso');
+    const headShell = src.getObjectByName('HeadShell');
+    const eye = src.getObjectByName('Eye');
+    const leftArm = src.getObjectByName('LeftArm');
+    const rightArm = src.getObjectByName('RightArm');
+    const leftRiser = src.getObjectByName('LeftRiser');
+    const rightRiser = src.getObjectByName('RightRiser');
+    if (!torso || !headShell || !eye || !leftArm || !rightArm || !leftRiser || !rightRiser) {
+      return false;
+    }
+    const prev = visual.root.userData.pilot as PilotRig | undefined;
+    if (prev?.group) visual.root.remove(prev.group);
+    src.position.set(0, 0, 0);
+    visual.root.add(src);
+    const rig: PilotRig = {
+      group: src,
+      torso,
+      headShell,
+      eye,
+      leftArm,
+      rightArm,
+      leftRiser,
+      rightRiser,
+      restTorsoX: torso.rotation.x,
+      restArmX: leftArm.rotation.x,
+    };
+    visual.root.userData.pilot = rig;
+    visual.eye = eye;
+    visual.helmet = headShell;
+    visual.root.userData.blenderPilot = true;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
+  await Promise.all([attachStudioCanopy(visual), attachStudioPilot(visual)]);
 }
 
 function deformCanopy(

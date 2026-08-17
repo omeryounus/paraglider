@@ -62,14 +62,18 @@ Re-export a template as GLB from the site and replace the matching file to fly y
 npm install
 npm run dev
 npm run build
-npm run export:blender   # optional: Blender 4.3 procedural canopy + maps
+npm run export:blender   # optional: Blender 4.3 ram-air canopy + seated pilot
 ```
 
 ### Blender procedural pipeline
 
-`scripts/blender_paraglider_pipeline.py` (Blender 4.3, headless) lofts a ram-air canopy from NACA-style airfoil cells, plots A/B/C/D cascade lines to the carabiners, remeshes a slope/height terrain patch, builds Principled nylon (SSS / sheen / transmission), and bakes Normal / AO / Roughness / Cavity maps.
+`scripts/blender_generate_assets.py` (Blender 4.3, headless) builds the in-game wing and person from public EN-B references:
 
-Outputs land in `public/models/` (`canopy.glb`, `.gltf`, `.fbx`, `.usda` / `.usdz`, `terrain_patch.glb`) plus `public/models/maps/` and `blender/paraglider_studio.blend`. The game loads `canopy.glb` at boot when present.
+- **Canopy** — Ozone Rush 6 MS planform (9.23 m projected span, AR 4.18), 20 visual cells, open leading-edge intakes, anhedral arc, navy / amber / crimson panels, PolyHaven `terlenka` CC0 polyester weave (normal / roughness / AO; panel colors stay painted).
+- **Pilot** — reclined pod-harness figure with helmet, visor, jacket, seat plate, carbon cocoon, A/B risers and carabiners. Named nodes (`Torso`, `HeadShell`, `LeftArm`, `RightArm`, `Eye`, `LeftRiser`, `RightRiser`) stay bound to the flight pose.
+- **Lines** — A shortest / D longest cascade plus brake and stabilo (packed into `paraglider.glb`; the live game draws its own suspension).
+
+Textures live in `blender/tex/`. Outputs: `public/models/canopy.glb`, `pilot.glb`, `paraglider.glb`, `canopy.fbx`, and `blender/paraglider_studio.blend`. Missing GLBs fall back to the procedural wing and capsule pilot.
 
 Vercel is configured as a Vite app (`vercel.json`). Push to `main` to ship.
 
