@@ -870,13 +870,31 @@ function updateBrakeLines(visual: GliderVisual, pilot: PilotRig): void {
   linePos.needsUpdate = true;
 }
 
-async function loadGlbScene(url: string): Promise<THREE.Group | null> {
+function isHelperMesh(mesh: THREE.Mesh): boolean {
+  const name = mesh.name.toLowerCase();
+  if (/(plane|shadow|catcher|bound|helper|grid|floor|ground|quad|card)/.test(name)) return true;
+  const geo = mesh.geometry;
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  const box = geo.boundingBox;
+  if (!box) return false;
+  const size = box.getSize(new THREE.Vector3());
+  const dims = [size.x, size.y, size.z].sort((a, b) => a - b);
+  const area = dims[1] * dims[2];
+  return dims[0] < 0.02 && area > 0.15;
+}
+
+async function loadGlbScene(url: string, doubleSide = false): Promise<THREE.Group | null> {
   try {
     const gltf = await new GLTFLoader().loadAsync(url);
     const scene = gltf.scene;
+    const drop: THREE.Mesh[] = [];
     scene.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
+      if (isHelperMesh(mesh)) {
+        drop.push(mesh);
+        return;
+      }
       mesh.castShadow = true;
       mesh.receiveShadow = false;
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
@@ -884,10 +902,12 @@ async function loadGlbScene(url: string): Promise<THREE.Group | null> {
         const mat = raw as THREE.MeshStandardMaterial;
         if (mat?.isMeshStandardMaterial) {
           mat.fog = true;
-          mat.side = THREE.DoubleSide;
+          mat.side = doubleSide ? THREE.DoubleSide : THREE.FrontSide;
+          mat.shadowSide = THREE.FrontSide;
         }
       }
     });
+    for (const mesh of drop) mesh.removeFromParent();
     return scene;
   } catch {
     return null;
@@ -905,8 +925,11 @@ function fitAsset(src: THREE.Object3D, targetSpan: number, axis: 'x' | 'y'): THR
 
 export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
   const parachute =
-    (await loadGlbScene('/models/parachute.glb')) ?? (await loadGlbScene('/models/canopy.glb'));
-  const person = (await loadGlbScene('/models/person.glb')) ?? (await loadGlbScene('/models/pilot.glb'));
+    (await loadGlbScene('/models/parachute.glb', true)) ??
+    (await loadGlbScene('/models/canopy.glb', true));
+  const person =
+    (await loadGlbScene('/models/person.glb', false)) ??
+    (await loadGlbScene('/models/pilot.glb', false));
   const fabric = ripstopNormal();
 
   if (parachute) {
@@ -992,7 +1015,12 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
       }
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
-      if (mesh.name === 'SeatBase' || mesh.name === 'HarnessPack' || mesh.name === 'HipBelt') {
+      if (
+        mesh.name === 'SeatBase' ||
+        mesh.name === 'HarnessPack' ||
+        mesh.name === 'HipBelt' ||
+        mesh.name === 'ChestStrap'
+      ) {
         mesh.visible = false;
         return;
       }

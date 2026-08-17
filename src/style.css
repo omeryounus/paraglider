@@ -60,7 +60,12 @@ canvas {
   background: radial-gradient(ellipse at 50% 28%, #14283c 0%, #06090e 75%);
   transition: opacity 0.4s ease, visibility 0.4s ease;
 }
-#loader.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+#loader.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  display: none !important;
+}
 .loader-wing {
   width: 96px;
   height: 24px;
