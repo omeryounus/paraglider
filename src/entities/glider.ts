@@ -942,7 +942,7 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
     person.position.x -= center.x;
     person.position.z -= center.z;
     person.position.y -= box.min.y;
-    person.rotation.x = 0.22;
+    person.rotation.x = 0.06;
     person.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -992,8 +992,11 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
       }
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
+      if (mesh.name === 'SeatBase' || mesh.name === 'HarnessPack' || mesh.name === 'HipBelt') {
+        mesh.visible = false;
+        return;
+      }
       const underHarness = mesh.parent?.name === 'Harness' || mesh.name.startsWith('Harness')
-        || mesh.name === 'SeatBase' || mesh.name === 'HarnessPack' || mesh.name === 'HipBelt'
         || mesh.name.includes('Carabiner');
       if (underHarness) return;
       if (hide.has(mesh.name) || mesh.name.includes('Arm') || mesh.name.includes('Hand')

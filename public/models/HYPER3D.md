@@ -1,10 +1,10 @@
 # Hyper3D Rodin drop-in
 
-Official Hyper3D pack downloads (`base_basic_pbr.glb` from each job zip on Drive).
+Official Hyper3D pack downloads (`base_basic_pbr.glb`).
 
 | Rodin job | Saved as |
 | --- | --- |
-| Person (`0e68bae9-4f5f-4f1e-a230-5f3874a028b1`) | `public/models/person.glb` |
+| Seated pilot (`73e4a776-1d58-4549-aa2a-f63a69c18175`) | `public/models/person.glb` |
 | Parachute (`5336934e-faee-4ad5-80c3-833496a18202`) | `public/models/parachute.glb` |
 
 Each file is the packed PBR GLB (diffuse + metallic-roughness + normal). No seat/pod file.
