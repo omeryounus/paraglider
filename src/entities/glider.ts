@@ -824,41 +824,14 @@ function deformCanopy(
 }
 
 function deformStudioCanopy(
-  visual: GliderVisual,
-  flight: FlightState,
-  leftBrake: number,
-  rightBrake: number,
-  time: number,
+  _visual: GliderVisual,
+  _flight: FlightState,
+  _leftBrake: number,
+  _rightBrake: number,
+  _time: number,
 ): void {
-  const mesh = visual.root.userData.studioCanopyMesh as THREE.Mesh | undefined;
-  const rest = visual.root.userData.studioRest as Float32Array | undefined;
-  const size = visual.root.userData.studioSize as THREE.Vector3 | undefined;
-  if (!mesh || !rest || !size) return;
-  const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
-  const halfX = Math.max(0.01, size.x * 0.5);
-  const minZ = visual.root.userData.studioMinZ as number;
-  const spanZ = Math.max(0.01, size.z);
-  const ripple = flight.inThermal || flight.inDowndraft ? 0.018 : 0.006;
-  const ears = flight.bigEars ? 0.38 : 0;
-  for (let i = 0; i < pos.count; i++) {
-    const rx = rest[i * 3];
-    const ry = rest[i * 3 + 1];
-    const rz = rest[i * 3 + 2];
-    const spanT = rx / halfX;
-    const chordT = (rz - minZ) / spanZ;
-    let y = ry;
-    if (chordT > 0.62) {
-      const w = (chordT - 0.62) / 0.38;
-      const pull = spanT < 0 ? leftBrake : rightBrake;
-      y -= pull * w * 0.22 * (0.45 + Math.abs(spanT));
-    }
-    if (Math.abs(spanT) > 0.78 && ears > 0) {
-      y -= ears * ((Math.abs(spanT) - 0.78) / 0.22);
-    }
-    if (ripple > 0.01) y += Math.sin(time * 7 + rx * 2.2 + rz * 2.8) * ripple * 0.35;
-    pos.setXYZ(i, rx, y, rz);
-  }
-  pos.needsUpdate = true;
+  // Hyper3D canopy is a baked shell. Per-vertex flutter fights its normals
+  // and reads as a flickering black card when you orbit in front.
 }
 
 function updateSuspensionLines(visual: GliderVisual, pilot: PilotRig): void {
@@ -996,64 +969,6 @@ function prepMaps(mat: THREE.MeshStandardMaterial, mipmaps = true): void {
   }
 }
 
-/** Drop Hyper3D capture cards: tall, thin, camera-facing sheets welded into the person. */
-function stripBillboardCards(geo: THREE.BufferGeometry): void {
-  const idx = geo.getIndex();
-  const pos = geo.getAttribute('position');
-  if (!idx || !pos) return;
-  if (!geo.boundingBox) geo.computeBoundingBox();
-  const size = geo.boundingBox!.getSize(new THREE.Vector3());
-  const minH = size.y * 0.65;
-  const minW = size.x * 0.4;
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-  const c = new THREE.Vector3();
-  const ab = new THREE.Vector3();
-  const ac = new THREE.Vector3();
-  const n = new THREE.Vector3();
-  type Rec = { faces: number[]; minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
-  const buckets = new Map<string, Rec>();
-  const arr = idx.array as Uint16Array | Uint32Array;
-  for (let i = 0; i < arr.length; i += 3) {
-    a.fromBufferAttribute(pos, arr[i]);
-    b.fromBufferAttribute(pos, arr[i + 1]);
-    c.fromBufferAttribute(pos, arr[i + 2]);
-    n.copy(ab.subVectors(b, a).cross(ac.subVectors(c, a))).normalize();
-    if (Math.abs(n.z) < 0.88) continue;
-    const z = (a.z + b.z + c.z) / 3;
-    const key = `${Math.round(z * 20) / 20}:${n.z > 0 ? '+' : '-'}`;
-    let rec = buckets.get(key);
-    if (!rec) {
-      rec = { faces: [], minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
-      buckets.set(key, rec);
-    }
-    rec.faces.push(i);
-    rec.minX = Math.min(rec.minX, a.x, b.x, c.x);
-    rec.maxX = Math.max(rec.maxX, a.x, b.x, c.x);
-    rec.minY = Math.min(rec.minY, a.y, b.y, c.y);
-    rec.maxY = Math.max(rec.maxY, a.y, b.y, c.y);
-    rec.minZ = Math.min(rec.minZ, a.z, b.z, c.z);
-    rec.maxZ = Math.max(rec.maxZ, a.z, b.z, c.z);
-  }
-  const drop = new Set<number>();
-  for (const rec of buckets.values()) {
-    const thin = rec.maxZ - rec.minZ < Math.max(0.09, size.z * 0.09);
-    const tall = rec.maxY - rec.minY >= minH;
-    const wide = rec.maxX - rec.minX >= minW;
-    if (thin && tall && wide && rec.faces.length > 80) {
-      for (const face of rec.faces) drop.add(face);
-    }
-  }
-  if (drop.size === 0) return;
-  const next: number[] = [];
-  for (let i = 0; i < arr.length; i += 3) {
-    if (drop.has(i)) continue;
-    next.push(arr[i], arr[i + 1], arr[i + 2]);
-  }
-  geo.setIndex(next);
-  geo.computeVertexNormals();
-}
-
 function isHelperMesh(mesh: THREE.Mesh): boolean {
   const name = mesh.name.toLowerCase();
   if (/(plane|shadow|catcher|bound|helper|grid|floor|ground|quad|card)/.test(name)) return true;
@@ -1079,7 +994,7 @@ async function loadGlbScene(url: string, _doubleSide = false): Promise<THREE.Gro
         drop.push(mesh);
         return;
       }
-      mesh.castShadow = true;
+      mesh.castShadow = false;
       mesh.receiveShadow = false;
       mesh.frustumCulled = false;
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
@@ -1122,7 +1037,6 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
   const person =
     (await loadGlbScene('/models/person.glb', false)) ??
     (await loadGlbScene('/models/pilot.glb', false));
-  const fabric = ripstopNormal();
 
   if (parachute) {
     parachute.name = 'Hyper3D_Parachute';
@@ -1147,9 +1061,7 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
         mat.roughness = 0.55;
         mat.metalness = 0;
         mat.metalnessMap = null;
-        mat.envMapIntensity = 0.15;
-        mat.normalMap = fabric;
-        mat.normalScale = new THREE.Vector2(0.32, 0.32);
+        mat.envMapIntensity = 0.2;
         prepMaps(mat, false);
         mat.needsUpdate = true;
       }
@@ -1189,7 +1101,7 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
       if (!mesh.isMesh) return;
       mesh.renderOrder = 2;
       mesh.frustumCulled = false;
-      stripBillboardCards(mesh.geometry);
+      mesh.castShadow = false;
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const raw of mats) {
         makeHeroOpaque(raw);

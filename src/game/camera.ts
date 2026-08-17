@@ -30,6 +30,11 @@ export function zoomLook(steps: number): void {
   lookRig.zoom = THREE.MathUtils.clamp(lookRig.zoom * 1.12 ** steps, 0.36, 2.9);
 }
 
+export function setLook(yaw: number, pitch = 0): void {
+  lookRig.yaw = yaw;
+  lookRig.pitch = THREE.MathUtils.clamp(pitch, -0.38, 1.2);
+}
+
 export function bindLookControls(canvas: HTMLCanvasElement, isLive: () => boolean): void {
   let dragging = false;
   let lastX = 0;
@@ -119,8 +124,13 @@ export function stepCamera(
   right.set(fwd.z, 0, -fwd.x);
   const dist = (11.2 + Math.min(2.4, flight.agl * 0.008) - speedT * 0.4) * lookRig.zoom;
   const horiz = Math.cos(pitch) * dist;
+  // 0 behind the pilot, 1 when the orbit is looking at their face.
+  const frontAmt = 0.5 - 0.5 * Math.cos(lookRig.yaw);
   ideal.copy(pos).addScaledVector(fwd, -horiz).addScaledVector(right, flight.bank * 1.1 + yawRate * 14);
-  ideal.y += Math.sin(pitch) * dist + 1.15;
+  // Stay under the wing: canopy hangs ~3.6 m above the harness.
+  ideal.y += Math.sin(pitch) * dist + 1.15 - frontAmt * 1.7;
+  const wingDeck = pos.y + 2.2;
+  if (ideal.y > wingDeck) ideal.y = wingDeck;
   const shake = (boost ? 0.12 : 0) + (flight.inDowndraft ? 0.22 : 0) + (flight.nearMiss ? 0.1 : 0);
   if (shake > 0) {
     ideal.x += (Math.random() - 0.5) * shake;
