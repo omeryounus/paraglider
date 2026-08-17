@@ -31,6 +31,24 @@ export function emptyProgress(): Progress {
   return { stars, best };
 }
 
+const UNLOCK_ORDER: LevelId[] = ['alpine', 'coastal', 'dune', 'ridge'];
+
+export function isUnlocked(progress: Progress, id: LevelId): boolean {
+  const idx = UNLOCK_ORDER.indexOf(id);
+  if (idx <= 0) return true;
+  const prev = UNLOCK_ORDER[idx - 1];
+  return (progress.stars[prev] ?? 0) >= 1;
+}
+
+export function nextUnlocked(progress: Progress, id: LevelId): LevelId {
+  const idx = UNLOCK_ORDER.indexOf(id);
+  for (let i = 1; i <= UNLOCK_ORDER.length; i++) {
+    const candidate = UNLOCK_ORDER[(idx + i) % UNLOCK_ORDER.length];
+    if (isUnlocked(progress, candidate)) return candidate;
+  }
+  return 'alpine';
+}
+
 export function recordResult(progress: Progress, id: LevelId, stars: number, score: number): Progress {
   const next: Progress = {
     stars: { ...progress.stars, [id]: Math.max(progress.stars[id] ?? 0, stars) },

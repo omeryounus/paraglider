@@ -692,9 +692,19 @@ export function poseGlider(
   const leftPull = flight.leftBrake + (flight.flare ? 0.4 : 0);
   const rightPull = flight.rightBrake + (flight.flare ? 0.4 : 0);
 
-  // Rest is ear-level; pull drops the hands toward the hips
+  // Rest is ear-level; pull drops the hands / brake toggles toward the hips
   pilot.leftArm.rotation.x = damp(pilot.leftArm.rotation.x, pilot.restArmX - leftPull * 1.05, 12, dt);
   pilot.rightArm.rotation.x = damp(pilot.rightArm.rotation.x, pilot.restArmX - rightPull * 1.05, 12, dt);
+  const restLY = (visual.root.userData.toggleRestL as number | undefined) ?? visual.leftToggle.position.y;
+  const restRY = (visual.root.userData.toggleRestR as number | undefined) ?? visual.rightToggle.position.y;
+  visual.leftToggle.position.y = restLY - leftPull * 0.38;
+  visual.rightToggle.position.y = restRY - rightPull * 0.38;
+
+  const person = visual.root.userData.hyper3dPerson as THREE.Object3D | undefined;
+  if (person) {
+    person.rotation.z = damp(person.rotation.z, weightShift * 0.22, 7, dt);
+    person.rotation.x = damp(person.rotation.x, 0.06 + (flight.flare ? 0.08 : 0), 6, dt);
+  }
 
   // Speed bar pushes legs slightly forward
   if (pilot.legs) {
@@ -702,8 +712,9 @@ export function poseGlider(
     pilot.legs.position.z = damp(pilot.legs.position.z, legExtend, 8, dt);
   }
 
-  // 6. Dynamic Canopy Deformation (Trailing edge flare & turbulence cloth flutter)
+  // 6. Dynamic Canopy Deformation (procedural wing and Hyper3D canopy)
   deformCanopy(visual, flight, leftPull, rightPull, time);
+  deformStudioCanopy(visual, flight, leftPull, rightPull, time);
 
   // 7. Dynamic Suspension & Brake Lines
   updateSuspensionLines(visual, pilot);
@@ -754,6 +765,44 @@ function deformCanopy(
   }
   pos.needsUpdate = true;
   visual.wing.geometry.computeVertexNormals();
+}
+
+function deformStudioCanopy(
+  visual: GliderVisual,
+  flight: FlightState,
+  leftBrake: number,
+  rightBrake: number,
+  time: number,
+): void {
+  const mesh = visual.root.userData.studioCanopyMesh as THREE.Mesh | undefined;
+  const rest = visual.root.userData.studioRest as Float32Array | undefined;
+  const size = visual.root.userData.studioSize as THREE.Vector3 | undefined;
+  if (!mesh || !rest || !size) return;
+  const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+  const halfX = Math.max(0.01, size.x * 0.5);
+  const minZ = visual.root.userData.studioMinZ as number;
+  const spanZ = Math.max(0.01, size.z);
+  const ripple = flight.inThermal || flight.inDowndraft ? 0.018 : 0.006;
+  const ears = flight.bigEars ? 0.38 : 0;
+  for (let i = 0; i < pos.count; i++) {
+    const rx = rest[i * 3];
+    const ry = rest[i * 3 + 1];
+    const rz = rest[i * 3 + 2];
+    const spanT = rx / halfX;
+    const chordT = (rz - minZ) / spanZ;
+    let y = ry;
+    if (chordT > 0.62) {
+      const w = (chordT - 0.62) / 0.38;
+      const pull = spanT < 0 ? leftBrake : rightBrake;
+      y -= pull * w * 0.22 * (0.45 + Math.abs(spanT));
+    }
+    if (Math.abs(spanT) > 0.78 && ears > 0) {
+      y -= ears * ((Math.abs(spanT) - 0.78) / 0.22);
+    }
+    y += Math.sin(time * 16 + rx * 2.2 + rz * 2.8) * ripple;
+    pos.setXYZ(i, rx, y, rz);
+  }
+  pos.needsUpdate = true;
 }
 
 function updateSuspensionLines(visual: GliderVisual, pilot: PilotRig): void {
@@ -982,6 +1031,22 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
     visual.wing.visible = false;
     visual.canopy.add(parachute);
     visual.root.userData.blenderCanopy = true;
+    parachute.updateMatrixWorld(true);
+    let canopyMesh: THREE.Mesh | undefined;
+    parachute.traverse((child) => {
+      if (canopyMesh) return;
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh) canopyMesh = mesh;
+    });
+    if (canopyMesh) {
+      const geo = canopyMesh.geometry;
+      const attr = geo.getAttribute('position');
+      visual.root.userData.studioCanopyMesh = canopyMesh;
+      visual.root.userData.studioRest = Float32Array.from(attr.array as Float32Array);
+      const box = new THREE.Box3().setFromBufferAttribute(attr as THREE.BufferAttribute);
+      visual.root.userData.studioSize = box.getSize(new THREE.Vector3());
+      visual.root.userData.studioMinZ = box.min.z;
+    }
   }
 
   if (person) {
@@ -1033,6 +1098,8 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
     const earLocalY = (size.y * 0.7 - harnessY) / harnessScale;
     visual.leftToggle.position.set(-0.22, earLocalY, 0.12);
     visual.rightToggle.position.set(0.22, earLocalY, 0.12);
+    visual.root.userData.toggleRestL = visual.leftToggle.position.y;
+    visual.root.userData.toggleRestR = visual.rightToggle.position.y;
     visual.root.userData.brakeLeft = visual.leftToggle;
     visual.root.userData.brakeRight = visual.rightToggle;
 

@@ -28,6 +28,9 @@ class SoundEngine {
   private varioNextBeep = 0;
   private varioEnabled = true;
   private muted = false;
+  private volume = 0.72;
+  private bedGain: GainNode | null = null;
+  private bedOsc: OscillatorNode[] = [];
 
   public init(): void {
     if (this.ctx) return;
@@ -37,7 +40,9 @@ class SoundEngine {
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioContextClass();
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.setValueAtTime(0.72, this.ctx.currentTime);
+      const stored = Number(localStorage.getItem('aero-glide-volume'));
+      this.volume = Number.isFinite(stored) ? Math.max(0, Math.min(1, stored)) : 0.72;
+      this.masterGain.gain.setValueAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
       this.setupWind();
       this.setupVario();
@@ -236,8 +241,60 @@ class SoundEngine {
     this.blip(soft ? 392 : 140, 0.32, soft ? 'sine' : 'triangle', 0.16);
   }
 
+  public setMasterVolume(value: number): void {
+    this.volume = Math.max(0, Math.min(1, value));
+    localStorage.setItem('aero-glide-volume', String(this.volume));
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.04);
+    }
+  }
+
+  public getMasterVolume(): number {
+    return this.volume;
+  }
+
+  public startBed(): void {
+    if (!this.ctx || !this.masterGain || this.bedGain) return;
+    this.bedGain = this.ctx.createGain();
+    this.bedGain.gain.value = 0.035;
+    this.bedGain.connect(this.masterGain);
+    for (const freq of [196, 247, 294]) {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.value = 520;
+      osc.connect(filt);
+      filt.connect(this.bedGain);
+      osc.start();
+      this.bedOsc.push(osc);
+    }
+  }
+
+  public stopBed(): void {
+    for (const osc of this.bedOsc) {
+      try {
+        osc.stop();
+      } catch {
+        /* already stopped */
+      }
+    }
+    this.bedOsc = [];
+    this.bedGain?.disconnect();
+    this.bedGain = null;
+  }
+
+  public playThermalSting(): void {
+    if (this.playBuffer('orb', 0.28, 0.72)) return;
+    this.blip(523, 0.35, 'sine', 0.08);
+  }
+
   public toggleMute(): boolean {
     this.muted = !this.muted;
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.04);
+    }
     return this.muted;
   }
 

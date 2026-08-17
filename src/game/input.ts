@@ -20,6 +20,7 @@ export function createInput(): {
   toggleFpv: () => void;
   toggleGyro: () => boolean;
   pollGamepad: () => void;
+  consumePause: () => boolean;
 } {
   const keys = new Set<string>();
   const state: InputState = {
@@ -54,6 +55,8 @@ export function createInput(): {
 
   let gyroSteer = 0;
   let gyroPitch = 0;
+  let prevStart = false;
+  let pauseQueued = false;
 
   const sync = (): void => {
     // Keyboard inputs:
@@ -182,8 +185,11 @@ export function createInput(): {
     const rb = gp.buttons[5]?.pressed ?? false;
     const btnA = gp.buttons[0]?.pressed ?? false;
     const btnY = gp.buttons[3]?.pressed ?? false;
+    const btnStart = gp.buttons[9]?.pressed ?? false;
 
     if (btnY && !state.fpv) state.fpv = true;
+    if (btnStart && !prevStart) pauseQueued = true;
+    prevStart = btnStart;
 
     touch.leftBrake = Math.max(lt, axisX < -0.15 ? -axisX : 0);
     touch.rightBrake = Math.max(rt, axisX > 0.15 ? axisX : 0);
@@ -206,5 +212,11 @@ export function createInput(): {
     state.fpv = !state.fpv;
   };
 
-  return { state, bind, setTouch, toggleFpv, toggleGyro, pollGamepad };
+  const consumePause = (): boolean => {
+    if (!pauseQueued) return false;
+    pauseQueued = false;
+    return true;
+  };
+
+  return { state, bind, setTouch, toggleFpv, toggleGyro, pollGamepad, consumePause };
 }

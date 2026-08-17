@@ -37,7 +37,8 @@
             <kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd> Turn &nbsp;|&nbsp;
             <kbd>B</kbd> Big Ears &nbsp;|&nbsp;
             <kbd>Shift</kbd> Boost &nbsp;|&nbsp;
-            <kbd>V</kbd> Cockpit POV
+            <kbd>V</kbd> Cockpit POV &nbsp;|&nbsp;
+            <kbd>Esc</kbd> Pause
           </p>
         </div>
       </section>
@@ -77,8 +78,10 @@
             <select id="hud-biome"></select>
           </label>
           <button type="button" id="btn-audio-mute" class="hud-btn" title="Toggle Sound">🔊</button>
+          <button type="button" id="btn-pause" class="hud-btn" title="Pause">❚❚</button>
         </div>
         <div id="hud-hint">Fly through the next glowing ring</div>
+        <div id="coach" hidden></div>
         <small id="hud-source">Terrain Studio Mesh</small>
         <div id="hud-chip" hidden></div>
       </aside>
@@ -119,6 +122,23 @@
           <div class="brake-knob">
             <span class="knob-icon">▼</span>
           </div>
+        </div>
+      </div>
+
+      <div id="pause" hidden>
+        <div class="modal-card">
+          <p class="modal-kicker">Paused</p>
+          <h2>Hold position</h2>
+          <label class="vol-row">
+            <span>Volume</span>
+            <input id="vol-slider" type="range" min="0" max="100" value="72" />
+          </label>
+          <div class="result-actions">
+            <button type="button" id="btn-resume">Resume</button>
+            <button type="button" id="btn-pause-retry">Retry</button>
+            <button type="button" class="ghost" id="btn-pause-menu">Courses</button>
+          </div>
+          <p class="pause-hint"><kbd>Esc</kbd> resume · <kbd>R</kbd> retry</p>
         </div>
       </div>
 

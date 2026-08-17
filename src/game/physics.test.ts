@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { BASE_SPEED, GLIDE_RATIO } from '../config/constants';
 import type { InputState } from './input';
-import { createFlight, stepPhysics, type PhysicsContext } from './physics';
+import { createFlight, isWallFold, stepPhysics, type PhysicsContext } from './physics';
 
 function idle(over: Partial<InputState> = {}): InputState {
   return {
@@ -65,5 +65,13 @@ describe('stepPhysics polar', () => {
     expect(flared.speed).toBeLessThan(trim.speed - 1.5);
     expect(Math.abs(flared.verticalSpeed)).toBeLessThan(Math.abs(trim.verticalSpeed) * 0.7);
     expect(flared.verticalSpeed).toBeLessThan(0);
+  });
+});
+
+describe('isWallFold', () => {
+  it('folds only when airborne and the wall is closer than the crash band', () => {
+    expect(isWallFold(18, 0.6)).toBe(true);
+    expect(isWallFold(18, 6)).toBe(false);
+    expect(isWallFold(1.55, 0.4)).toBe(false);
   });
 });

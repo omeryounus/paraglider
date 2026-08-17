@@ -16,7 +16,7 @@ import {
   type Course,
 } from './game/course';
 import { createInput } from './game/input';
-import { assistToward, createFlight, grantBoost, stepPhysics, triggerSpeedRing } from './game/physics';
+import { assistToward, createFlight, grantBoost, isWallFold, stepPhysics, triggerSpeedRing } from './game/physics';
 import { createComposer, resizeComposer } from './game/postfx';
 import {
   awardLanding,
@@ -28,7 +28,7 @@ import {
   starCount,
   tickCombo,
 } from './game/scoring';
-import { loadProgress, newSession, recordResult, type Session } from './game/state';
+import { isUnlocked, loadProgress, newSession, nextUnlocked, recordResult, type Session } from './game/state';
 import { loadTerrain, purgeTerrainFromScene, type TerrainWorld } from './game/terrain';
 import { updateWater } from './game/water';
 import type { FlightState, LevelDef, LevelId, Progress, ScoreState } from './game/types';
@@ -77,6 +77,16 @@ const hud = bindHud();
 const menus = bindMenus();
 const popups: Popup[] = [];
 const popupHost = document.querySelector<HTMLElement>('#popup-layer')!;
+const pauseEl = document.querySelector<HTMLElement>('#pause')!;
+const coachEl = document.querySelector<HTMLElement>('#coach')!;
+const volSlider = document.querySelector<HTMLInputElement>('#vol-slider');
+
+const ALPINE_COACH: Array<{ until: number; text: string }> = [
+  { until: 5, text: 'A / D or ← / → banks the wing. Fly through the wide green gates.' },
+  { until: 10, text: 'S, ↑ or Space flares and slows you. W dives for speed.' },
+  { until: 15, text: 'Blue columns are lift — drift through them to climb.' },
+  { until: 20, text: 'Thread the remaining gates, then flare onto the bullseye.' },
+];
 
 let progress: Progress = loadProgress();
 let session: Session = { phase: 'menu', result: null, timeLeft: 0, countdown: 0 };
@@ -86,6 +96,13 @@ let course: Course | null = null;
 let flight: FlightState = createFlight();
 let score: ScoreState = emptyScore();
 let atmo: Atmosphere | null = null;
+let paused = false;
+let coachElapsed = 0;
+let inThermalLast = false;
+const wallFwd = new THREE.Vector3();
+const wallLeft = new THREE.Vector3();
+const wallRight = new THREE.Vector3();
+const wallUp = new THREE.Vector3();
 
 const sampleGround = (origin: THREE.Vector3): number | null => {
   if (!terrain) return null;
@@ -114,6 +131,57 @@ const sampleClearance = (origin: THREE.Vector3, heading: number): number => {
   return best;
 };
 
+const sampleWall = (origin: THREE.Vector3, heading: number): number => {
+  if (!terrain) return 80;
+  const sin = Math.sin(heading);
+  const cos = Math.cos(heading);
+  wallFwd.set(sin, -0.06, cos).normalize();
+  wallUp.set(sin, 0.14, cos).normalize();
+  wallLeft.set(sin * 0.86 - cos * 0.5, 0, cos * 0.86 + sin * 0.5).normalize();
+  wallRight.set(sin * 0.86 + cos * 0.5, 0, cos * 0.86 - sin * 0.5).normalize();
+  let best = 80;
+  for (const dir of [wallFwd, wallUp, wallLeft, wallRight]) {
+    raycaster.set(origin, dir);
+    raycaster.far = 8;
+    const hit = raycaster.intersectObject(terrain.collision, true)[0];
+    if (hit) best = Math.min(best, hit.distance);
+  }
+  return best;
+};
+
+function setPaused(value: boolean): void {
+  if (value && session.phase !== 'countdown' && session.phase !== 'flying') return;
+  paused = value;
+  pauseEl.hidden = !value;
+  renderer.domElement.style.pointerEvents = value ? 'none' : '';
+  if (value) audio.update(0, 0, false);
+}
+
+function togglePause(): void {
+  if (session.phase !== 'countdown' && session.phase !== 'flying') return;
+  setPaused(!paused);
+}
+
+function hideCoach(): void {
+  coachEl.hidden = true;
+}
+
+function paintCoach(dt: number): void {
+  const live = session.phase === 'countdown' || session.phase === 'flying';
+  if (level.id !== 'alpine' || !live || paused) {
+    if (!live) hideCoach();
+    return;
+  }
+  coachElapsed += dt;
+  if (coachElapsed > 20) {
+    hideCoach();
+    return;
+  }
+  const line = ALPINE_COACH.find((item) => coachElapsed < item.until);
+  coachEl.hidden = !line;
+  if (line) coachEl.textContent = line.text;
+}
+
 function clearWorld(): void {
   course?.group.removeFromParent();
   terrain?.dispose();
@@ -127,10 +195,21 @@ function clearWorld(): void {
 }
 
 async function startLevel(id: LevelId): Promise<void> {
+  if (!isUnlocked(progress, id)) {
+    openMenu();
+    return;
+  }
   audio.init();
   audio.resume();
+  audio.startBed();
 
   session.phase = 'load';
+  paused = false;
+  pauseEl.hidden = true;
+  renderer.domElement.style.pointerEvents = '';
+  hideCoach();
+  coachElapsed = 0;
+  inThermalLast = false;
   showSelect(menus, false);
   hideResults(menus);
   setHudVisible(hud, false);
@@ -156,7 +235,7 @@ async function startLevel(id: LevelId): Promise<void> {
   );
   resetLook();
   snapCamera(spawn, flight.heading);
-  fillBiomeSelect(hud, level.id, (next) => void startLevel(next));
+  fillBiomeSelect(hud, level.id, progress, (next) => void startLevel(next));
   setTerrainSource(hud, terrain.fromStudio, level.asset);
   setLoader(menus, 'Ready', true);
   setHudVisible(hud, true);
@@ -164,6 +243,11 @@ async function startLevel(id: LevelId): Promise<void> {
 
 function openMenu(): void {
   session.phase = 'menu';
+  paused = false;
+  pauseEl.hidden = true;
+  renderer.domElement.style.pointerEvents = '';
+  hideCoach();
+  audio.stopBed();
   setHudVisible(hud, false);
   hideResults(menus);
   renderLevelSelect(menus, progress, (id) => void startLevel(id));
@@ -174,8 +258,15 @@ function finish(kind: 'clear' | 'crash' | 'timeout'): void {
   if (session.phase !== 'flying' && session.phase !== 'countdown') return;
   session.phase = 'results';
   session.result = kind;
+  paused = false;
+  pauseEl.hidden = true;
+  renderer.domElement.style.pointerEvents = '';
+  hideCoach();
+  audio.stopBed();
   const stars = starCount(score.total, level.starScores, kind === 'clear');
   progress = recordResult(progress, level.id, stars, Math.floor(score.total));
+  const nextId = nextUnlocked(progress, level.id);
+  const nextOpen = nextId !== level.id;
   showResults(
     menus,
     kind,
@@ -183,11 +274,9 @@ function finish(kind: 'clear' | 'crash' | 'timeout'): void {
     session.timeLeft,
     level.starScores,
     () => void startLevel(level.id),
-    () => {
-      const idx = LEVELS.findIndex((item) => item.id === level.id);
-      void startLevel(LEVELS[(idx + 1) % LEVELS.length].id);
-    },
+    () => void startLevel(nextId),
     openMenu,
+    nextOpen,
   );
 }
 
@@ -218,8 +307,14 @@ function tickPlay(dt: number): void {
   if (!terrain || !course || !atmo) return;
   const pos = glider.root.position;
 
-  // Poll Gamepad input
   input.pollGamepad();
+  if (input.consumePause()) togglePause();
+  if (paused) {
+    paintCoach(0);
+    return;
+  }
+
+  paintCoach(dt);
 
   if (session.phase === 'countdown') {
     session.countdown -= dt;
@@ -259,6 +354,15 @@ function tickPlay(dt: number): void {
     if (magnet) assistToward(flight, pos, magnet.position, dt);
     tickCombo(score, dt);
     if (flight.nearMiss) awardNearMiss(score, dt);
+    if (flight.inThermal && !inThermalLast) audio.playThermalSting();
+    inThermalLast = flight.inThermal;
+
+    if (isWallFold(flight.agl, sampleWall(pos, flight.heading))) {
+      audio.playLandingSound(false);
+      popups.push(spawnPopup(popupHost, pos.clone(), 'FOLD', '#ff5a4a'));
+      finish('crash');
+      return;
+    }
 
     const event = updateCourse(course, pos, clock.elapsedTime);
     if (event.kind === 'ring' && event.ring) {
@@ -340,6 +444,11 @@ function bindCamRig(): void {
   reset?.addEventListener('click', () => resetLook());
 }
 
+function syncMuteButton(): void {
+  const btn = document.querySelector<HTMLButtonElement>('#btn-audio-mute');
+  if (btn) btn.textContent = audio.getMasterVolume() <= 0.01 ? '🔇' : '🔊';
+}
+
 function bindAudioToggle(): void {
   const btn = document.querySelector<HTMLButtonElement>('#btn-audio-mute');
   if (!btn) return;
@@ -349,13 +458,31 @@ function bindAudioToggle(): void {
   });
 }
 
+function bindPauseUi(): void {
+  document.querySelector('#btn-pause')?.addEventListener('click', () => togglePause());
+  document.querySelector('#btn-resume')?.addEventListener('click', () => setPaused(false));
+  document.querySelector('#btn-pause-retry')?.addEventListener('click', () => {
+    if (session.phase === 'flying' || session.phase === 'countdown') void startLevel(level.id);
+  });
+  document.querySelector('#btn-pause-menu')?.addEventListener('click', () => openMenu());
+  if (volSlider) {
+    volSlider.value = String(Math.round(audio.getMasterVolume() * 100));
+    volSlider.addEventListener('input', () => {
+      audio.init();
+      audio.setMasterVolume(Number(volSlider.value) / 100);
+      syncMuteButton();
+    });
+  }
+}
+
 function boot(): void {
   input.bind();
   bindTouch(input.setTouch, input.toggleFpv, input.toggleGyro);
   bindCamRig();
   bindAudioToggle();
+  bindPauseUi();
   bindLookControls(renderer.domElement, () =>
-    session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'results',
+    !paused && (session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'results'),
   );
 
   // Resume audio context on first user interaction anywhere
@@ -386,7 +513,10 @@ function boot(): void {
       const btn = document.querySelector<HTMLButtonElement>('#btn-audio-mute');
       if (btn) btn.textContent = isMuted ? '🔇' : '🔊';
     }
-    if (key === 'escape') openMenu();
+    if ((key === 'escape' || key === 'p') && !event.repeat) {
+      if (session.phase === 'results') openMenu();
+      else togglePause();
+    }
     if (!live) return;
     if (key === '=' || key === '+') zoomLook(-1);
     if (key === '-' || key === '_') zoomLook(1);

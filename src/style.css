@@ -21,6 +21,7 @@
 }
 
 html, body, #app {
+  position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -312,7 +313,9 @@ kbd {
 #level-select[hidden],
 #hud[hidden],
 #cam-rig[hidden],
-#results[hidden] {
+#results[hidden],
+#pause[hidden],
+#coach[hidden] {
   display: none !important;
 }
 
@@ -541,6 +544,52 @@ kbd {
 }
 .modal-card.crash h2, .modal-card.timeout h2 { color: var(--hot); }
 .modal-card.clear h2 { color: var(--green); }
+
+#pause {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 8, 14, 0.72);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+.vol-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin: 0.9rem 0 1.1rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.vol-row input { width: 160px; accent-color: var(--cyan); }
+.pause-hint { color: var(--muted); font-size: 0.78rem; margin-top: 0.85rem; }
+.level-card.locked {
+  opacity: 0.48;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+.level-card.locked strong::after {
+  content: " Locked";
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+#coach {
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 10px;
+  background: rgba(48, 224, 255, 0.12);
+  color: #d7f7ff;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
 
 /* Responsive adjustments for desktop vs mobile */
 @media (min-width: 900px) {

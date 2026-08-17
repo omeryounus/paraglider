@@ -1,7 +1,8 @@
-import type { FlightState, LevelId, ScoreState } from '../game/types';
+import type { FlightState, LevelId, Progress, ScoreState } from '../game/types';
 import { BOOST_MAX } from '../config/constants';
 import { LEVELS } from '../config/levels';
 import { formatTime } from '../game/math';
+import { isUnlocked } from '../game/state';
 
 export interface HudRefs {
   root: HTMLElement;
@@ -43,12 +44,19 @@ export function bindHud(): HudRefs {
   };
 }
 
-export function fillBiomeSelect(hud: HudRefs, current: LevelId, onPick: (id: LevelId) => void): void {
+export function fillBiomeSelect(
+  hud: HudRefs,
+  current: LevelId,
+  progress: Progress,
+  onPick: (id: LevelId) => void,
+): void {
   hud.biome.replaceChildren();
   for (const level of LEVELS) {
     const opt = document.createElement('option');
     opt.value = level.id;
-    opt.textContent = `${level.name} · ${level.template}`;
+    const open = isUnlocked(progress, level.id);
+    opt.textContent = open ? `${level.name} · ${level.template}` : `${level.name} · Locked`;
+    opt.disabled = !open;
     hud.biome.appendChild(opt);
   }
   hud.biome.value = current;

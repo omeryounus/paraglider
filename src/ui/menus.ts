@@ -1,5 +1,6 @@
 import { LEVELS } from '../config/levels';
 import { formatTime } from '../game/math';
+import { isUnlocked } from '../game/state';
 import type { LevelId, Progress, ResultKind, ScoreState } from '../game/types';
 import { starCount } from '../game/scoring';
 
@@ -34,17 +35,20 @@ export function renderLevelSelect(
   for (const level of LEVELS) {
     const stars = progress.stars[level.id] ?? 0;
     const best = progress.best[level.id] ?? 0;
+    const unlocked = isUnlocked(progress, level.id);
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = `level-card biome-${level.id}`;
+    card.className = `level-card biome-${level.id}${unlocked ? '' : ' locked'}`;
+    card.disabled = !unlocked;
+    const prev = LEVELS[Math.max(0, LEVELS.findIndex((item) => item.id === level.id) - 1)];
     card.innerHTML = `
       <span class="level-kicker">${level.subtitle}</span>
       <strong>${level.name}</strong>
-      <p>${level.blurb}</p>
+      <p>${unlocked ? level.blurb : `Earn 1★ on ${prev.name} to unlock.`}</p>
       <span class="stars">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>
-      <small>${best ? `Best ${best.toLocaleString()}` : 'Unflown'} · ${formatTime(level.parTime)} on the clock</small>
+      <small>${best ? `Best ${best.toLocaleString()}` : unlocked ? 'Unflown' : 'Locked'} · ${formatTime(level.parTime)} on the clock</small>
     `;
-    card.addEventListener('click', () => onPick(level.id));
+    if (unlocked) card.addEventListener('click', () => onPick(level.id));
     menus.grid.appendChild(card);
   }
 }
@@ -62,6 +66,7 @@ export function showResults(
   onRetry: () => void,
   onNext: () => void,
   onMenu: () => void,
+  nextOpen = false,
 ): void {
   const cleared = kind === 'clear';
   const stars = starCount(score.total, thresholds, cleared);
@@ -80,7 +85,7 @@ export function showResults(
     </dl>
     <div class="result-actions">
       <button type="button" id="btn-retry">Retry</button>
-      <button type="button" id="btn-next" ${cleared ? '' : 'hidden'}>Next course</button>
+      <button type="button" id="btn-next" ${cleared && nextOpen ? '' : 'hidden'}>Next course</button>
       <button type="button" class="ghost" id="btn-menu">Courses</button>
     </div>
   `;

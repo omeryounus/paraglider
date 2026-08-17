@@ -13,6 +13,7 @@ import {
   SPEED_RING_MULT,
   SPEED_RING_TIME,
   THERMAL_LIFT,
+  WALL_CRASH_DIST,
 } from '../config/constants';
 import type { InputState } from './input';
 import { clamp, damp } from './math';
@@ -249,4 +250,9 @@ export function assistToward(flight: FlightState, from: THREE.Vector3, target: T
 export function triggerSpeedRing(flight: FlightState): void {
   flight.speedBoost = Math.max(flight.speedBoost, SPEED_RING_TIME);
   grantBoost(flight, 25);
+}
+
+/** Airborne strike on a cliff or fold — not a pad landing. */
+export function isWallFold(agl: number, forwardClearance: number): boolean {
+  return agl > LANDING_AGL + 0.4 && forwardClearance < WALL_CRASH_DIST;
 }
