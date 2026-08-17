@@ -115,8 +115,8 @@ export function createGlider(): GliderVisual {
 
   const wing = new THREE.Mesh(geometry, wingMat);
   wing.name = 'Wing';
-  wing.castShadow = true;
-  wing.receiveShadow = true;
+  wing.castShadow = false;
+  wing.receiveShadow = false;
   canopy.add(wing);
 
   // 2. Rib Seam Tapes (High-definition dark cell partition seams)

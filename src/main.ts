@@ -56,8 +56,7 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0xb7d2e8, 1);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = false;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -106,9 +105,6 @@ let paused = false;
 let coachElapsed = 0;
 let inThermalLast = false;
 const wallFwd = new THREE.Vector3();
-const wallLeft = new THREE.Vector3();
-const wallRight = new THREE.Vector3();
-const wallUp = new THREE.Vector3();
 
 const sampleGround = (origin: THREE.Vector3): number | null => {
   if (!terrain) return null;
@@ -139,20 +135,11 @@ const sampleClearance = (origin: THREE.Vector3, heading: number): number => {
 
 const sampleWall = (origin: THREE.Vector3, heading: number): number => {
   if (!terrain) return 80;
-  const sin = Math.sin(heading);
-  const cos = Math.cos(heading);
-  wallFwd.set(sin, -0.06, cos).normalize();
-  wallUp.set(sin, 0.14, cos).normalize();
-  wallLeft.set(sin * 0.86 - cos * 0.5, 0, cos * 0.86 + sin * 0.5).normalize();
-  wallRight.set(sin * 0.86 + cos * 0.5, 0, cos * 0.86 - sin * 0.5).normalize();
-  let best = 80;
-  for (const dir of [wallFwd, wallUp, wallLeft, wallRight]) {
-    raycaster.set(origin, dir);
-    raycaster.far = 8;
-    const hit = raycaster.intersectObject(terrain.collision, true)[0];
-    if (hit) best = Math.min(best, hit.distance);
-  }
-  return best;
+  wallFwd.set(Math.sin(heading), -0.04, Math.cos(heading)).normalize();
+  raycaster.set(origin, wallFwd);
+  raycaster.far = 4;
+  const hit = raycaster.intersectObject(terrain.collision, true)[0];
+  return hit ? hit.distance : 80;
 };
 
 function setPaused(value: boolean): void {

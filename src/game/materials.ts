@@ -71,8 +71,8 @@ export function applyTerrainPbr(root: THREE.Object3D): void {
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh) return;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     const next = mats.map((mat) => upgradeMaterial(mat, detail, mesh.name === 'Water'));
     mesh.material = Array.isArray(mesh.material) ? next : next[0];

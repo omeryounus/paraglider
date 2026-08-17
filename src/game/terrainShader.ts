@@ -441,7 +441,7 @@ export function applyTerrainSplat(root: THREE.Object3D, biome: LevelId, extent =
     const verts = mesh.geometry?.getAttribute('position')?.count ?? 0;
     if (verts > 0 && verts < 48) return;
     mesh.castShadow = false;
-    mesh.receiveShadow = true;
+    mesh.receiveShadow = false;
     if (mesh.geometry) {
       ensureUpNormals(mesh.geometry, true);
     }

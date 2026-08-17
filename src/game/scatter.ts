@@ -95,8 +95,8 @@ export function addEnvironmentScatter(
     vertexColors: true,
   });
   const trees = new THREE.InstancedMesh(treeGeo, treeMat, treeBudget);
-  trees.castShadow = true;
-  trees.receiveShadow = true;
+  trees.castShadow = false;
+  trees.receiveShadow = false;
   trees.name = 'ScatterTrees';
 
   const dummy = new THREE.Object3D();

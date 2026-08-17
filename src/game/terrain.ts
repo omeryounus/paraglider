@@ -314,7 +314,7 @@ function mountProcedural(level: LevelDef, scene: THREE.Scene, sunDir: THREE.Vect
   ensureUpNormals(geo);
   const mesh = new THREE.Mesh(geo, createSplatMaterial(level.id, WORLD_SIZE));
   mesh.name = 'Terrain_Surface';
-  mesh.receiveShadow = true;
+  mesh.receiveShadow = false;
   mesh.castShadow = false;
   group.add(mesh);
 

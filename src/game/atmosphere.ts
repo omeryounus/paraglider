@@ -61,16 +61,7 @@ export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphe
   scene.add(fill);
 
   const sun = new THREE.DirectionalLight(0xfffaed, 2.15);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.near = 4;
-  sun.shadow.camera.far = 900;
-  sun.shadow.camera.left = -220;
-  sun.shadow.camera.right = 220;
-  sun.shadow.camera.top = 220;
-  sun.shadow.camera.bottom = -220;
-  sun.shadow.bias = -0.0012;
-  sun.shadow.normalBias = 0.12;
+  sun.castShadow = false;
   sun.position.copy(sunDir).multiplyScalar(SUN_DISTANCE);
   scene.add(sun);
   scene.add(sun.target);
@@ -102,12 +93,8 @@ export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphe
 }
 
 export function trackSun(atmo: Atmosphere, focus: THREE.Vector3): void {
-  const snap = 6;
-  const tx = Math.round(focus.x / snap) * snap;
-  const ty = Math.round(focus.y / snap) * snap;
-  const tz = Math.round(focus.z / snap) * snap;
-  atmo.sun.target.position.set(tx, ty, tz);
-  atmo.sun.position.set(tx, ty, tz).addScaledVector(atmo.sunDir, SUN_DISTANCE);
+  atmo.sun.target.position.copy(focus);
+  atmo.sun.position.copy(focus).addScaledVector(atmo.sunDir, SUN_DISTANCE);
   atmo.sun.target.updateMatrixWorld();
   atmo.rim.target.position.copy(focus);
   atmo.rim.position.copy(focus).addScaledVector(atmo.rimDir, 90);
