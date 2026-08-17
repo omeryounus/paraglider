@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "export:terrains": "node scripts/export-studio-glbs.mjs"
+    "export:terrains": "node scripts/export-studio-glbs.mjs",
+    "export:blender": "blender --background --python scripts/blender_paraglider_pipeline.py"
   },
   "dependencies": {
     "three": "^0.178.0"

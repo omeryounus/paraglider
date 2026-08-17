@@ -31,7 +31,7 @@ import { loadProgress, newSession, recordResult, type Session } from './game/sta
 import { loadTerrain, purgeTerrainFromScene, type TerrainWorld } from './game/terrain';
 import { updateWater } from './game/water';
 import type { FlightState, LevelDef, LevelId, Progress, ScoreState } from './game/types';
-import { createGlider, poseGlider } from './entities/glider';
+import { attachStudioCanopy, createGlider, poseGlider } from './entities/glider';
 import { createThermalDust, spawnPopup, updatePopups, updateThermalDust, type Popup } from './entities/effects';
 import { paintWaypointHud } from './entities/waypointArrow';
 import { bindHud, fillBiomeSelect, paintHud, setHudVisible, setTerrainSource } from './ui/hud';
@@ -351,6 +351,7 @@ function boot(): void {
   showSelect(menus, true);
   setLoader(menus, 'Choose a canyon', true);
   session.phase = 'menu';
+  void attachStudioCanopy(glider);
   frame();
 }
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { FlightState } from '../game/types';
 import { damp } from '../game/math';
 
@@ -363,8 +364,41 @@ export function poseGlider(
   pilot.leftArm.rotation.x = damp(pilot.leftArm.rotation.x, -1.05 + leftBrake * 0.85, 8, dt);
   pilot.rightArm.rotation.x = damp(pilot.rightArm.rotation.x, -1.05 + rightBrake * 0.85, 8, dt);
 
-  deformCanopy(visual, flight, leftBrake, rightBrake, time);
+  if (!visual.root.userData.blenderCanopy) {
+    deformCanopy(visual, flight, leftBrake, rightBrake, time);
+  }
   updateLines(visual, pilot);
+}
+
+export async function attachStudioCanopy(visual: GliderVisual): Promise<boolean> {
+  try {
+    const gltf = await new GLTFLoader().loadAsync('/models/canopy.glb');
+    const src = gltf.scene.getObjectByName('Canopy') ?? gltf.scene;
+    let first: THREE.Mesh | null = null;
+    src.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = false;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (mat?.isMeshStandardMaterial) {
+        mat.side = THREE.DoubleSide;
+        mat.shadowSide = THREE.DoubleSide;
+        mat.emissive = new THREE.Color(0x3a0a12);
+        mat.emissiveIntensity = 0.14;
+        mat.fog = false;
+      }
+      if (!first) first = mesh;
+    });
+    if (!first) return false;
+    visual.wing.visible = false;
+    src.position.set(0, 0, 0);
+    visual.canopy.add(src);
+    visual.root.userData.blenderCanopy = true;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function deformCanopy(

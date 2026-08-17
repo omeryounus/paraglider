@@ -1,0 +1,26 @@
+#usda 1.0
+(
+    defaultPrim = "ParagliderRoot"
+    metersPerUnit = 1
+    upAxis = "Y"
+    doc = "Aero Glide canopy exported from Blender procedural pipeline. Runtime mesh: canopy.glb"
+)
+
+def Xform "ParagliderRoot" (
+    assetInfo = {
+        string name = "AeroGlideCanopy"
+        string version = "1.0"
+    }
+)
+{
+    custom string pipeline = "scripts/blender_paraglider_pipeline.py"
+    custom string runtimePayload = "canopy.glb"
+    def Xform "Canopy" {
+        float3 xformOp:translate = (0, 3.15, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+    def Xform "HarnessPod" {
+        float3 xformOp:translate = (0, 0.12, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}

@@ -62,7 +62,14 @@ Re-export a template as GLB from the site and replace the matching file to fly y
 npm install
 npm run dev
 npm run build
+npm run export:blender   # optional: Blender 4.3 procedural canopy + maps
 ```
+
+### Blender procedural pipeline
+
+`scripts/blender_paraglider_pipeline.py` (Blender 4.3, headless) lofts a ram-air canopy from NACA-style airfoil cells, plots A/B/C/D cascade lines to the carabiners, remeshes a slope/height terrain patch, builds Principled nylon (SSS / sheen / transmission), and bakes Normal / AO / Roughness / Cavity maps.
+
+Outputs land in `public/models/` (`canopy.glb`, `.gltf`, `.fbx`, `.usda` / `.usdz`, `terrain_patch.glb`) plus `public/models/maps/` and `blender/paraglider_studio.blend`. The game loads `canopy.glb` at boot when present.
 
 Vercel is configured as a Vite app (`vercel.json`). Push to `main` to ship.
 
