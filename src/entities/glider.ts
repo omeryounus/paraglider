@@ -91,7 +91,7 @@ export function createGlider(): GliderVisual {
   const wingMat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.52,
-    metalness: 0.02,
+    metalness: 0,
     side: THREE.DoubleSide,
     shadowSide: THREE.DoubleSide,
     fog: true,
@@ -870,6 +870,24 @@ function updateBrakeLines(visual: GliderVisual, pilot: PilotRig): void {
   linePos.needsUpdate = true;
 }
 
+function prepMaps(mat: THREE.MeshStandardMaterial): void {
+  const maps = [
+    mat.map,
+    mat.normalMap,
+    mat.roughnessMap,
+    mat.aoMap,
+    mat.emissiveMap,
+  ];
+  for (const tex of maps) {
+    if (!tex) continue;
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.anisotropy = 4;
+    tex.needsUpdate = true;
+  }
+}
+
 function isHelperMesh(mesh: THREE.Mesh): boolean {
   const name = mesh.name.toLowerCase();
   if (/(plane|shadow|catcher|bound|helper|grid|floor|ground|quad|card)/.test(name)) return true;
@@ -904,6 +922,7 @@ async function loadGlbScene(url: string, doubleSide = false): Promise<THREE.Grou
           mat.fog = true;
           mat.side = doubleSide ? THREE.DoubleSide : THREE.FrontSide;
           mat.shadowSide = THREE.FrontSide;
+          prepMaps(mat);
         }
       }
     });
@@ -945,10 +964,16 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
       for (const raw of mats) {
         const mat = raw as THREE.MeshStandardMaterial;
         if (!mat?.isMeshStandardMaterial) continue;
-        mat.roughness = 0.56;
+        mat.transparent = false;
+        mat.opacity = 1;
+        mat.alphaTest = 0;
+        mat.roughness = 0.55;
         mat.metalness = 0;
+        mat.metalnessMap = null;
+        mat.envMapIntensity = 0.15;
         mat.normalMap = fabric;
-        mat.normalScale = new THREE.Vector2(0.62, 0.62);
+        mat.normalScale = new THREE.Vector2(0.32, 0.32);
+        prepMaps(mat);
         mat.needsUpdate = true;
       }
     });
@@ -973,8 +998,16 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
       for (const raw of mats) {
         const mat = raw as THREE.MeshStandardMaterial;
         if (!mat?.isMeshStandardMaterial) continue;
-        mat.roughness = Math.max(mat.roughness ?? 0.5, 0.58);
-        mat.metalness = Math.min(mat.metalness ?? 0.08, 0.12);
+        mat.transparent = false;
+        mat.opacity = 1;
+        mat.alphaTest = 0;
+        mat.alphaHash = false;
+        mat.depthWrite = true;
+        mat.roughness = Math.max(mat.roughness ?? 0.6, 0.65);
+        mat.metalness = 0.04;
+        mat.metalnessMap = null;
+        mat.envMapIntensity = 0.2;
+        prepMaps(mat);
         mat.needsUpdate = true;
       }
     });

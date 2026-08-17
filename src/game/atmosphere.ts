@@ -47,8 +47,10 @@ export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphe
   sunDir.setFromSphericalCoords(1, phi, theta);
   uniforms['sunPosition'].value.copy(sunDir);
 
-  scene.fog = new THREE.Fog(FOG_COLOR, 300, 4000);
-  scene.background = new THREE.Color(FOG_COLOR);
+  const fogColor = new THREE.Color(_level.fogColor ?? FOG_COLOR);
+  // Exp2 has no near-clip plane, so it won't cut a hard white band behind the pilot.
+  scene.fog = new THREE.FogExp2(fogColor, Math.min(_level.fog ?? 0.00045, 0.0005));
+  scene.background = fogColor;
 
   const hemi = new THREE.HemisphereLight(0xb8dcff, 0x5a564c, 1.25);
   scene.add(hemi);

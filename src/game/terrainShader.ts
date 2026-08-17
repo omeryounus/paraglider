@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { LevelId } from './types';
+import { getLevel } from '../config/levels';
 import { getTerrainMaps } from './terrainTextures';
 
 export interface BiomeSplat {
@@ -235,7 +236,7 @@ function bindSplatUniforms(
   shader.uniforms.uBeachMax = { value: pal.beachMax };
   shader.uniforms.uStrata = { value: pal.strata };
   shader.uniforms.uSkirtInner = { value: extent * 0.5 };
-  shader.uniforms.uFogColor = { value: new THREE.Color(0xb7d2e8) };
+  shader.uniforms.uFogColor = { value: new THREE.Color(getLevel(biome).fogColor) };
 }
 
 export function createSplatMaterial(biome: LevelId, extent = 1600): THREE.MeshStandardMaterial {
