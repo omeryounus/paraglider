@@ -27,8 +27,14 @@ describe('createGlider scene graph', () => {
       'RightFoot',
       'Harness',
       'ChestStrap',
+      'SeatBase',
+      'HarnessPack',
+      'LeftCarabiner',
+      'RightCarabiner',
       'LeftRiser',
       'RightRiser',
+      'LeftRiserWeb_A',
+      'RightRiserWeb_C',
       'Canopy',
       'Wing',
       'Suspension',
@@ -36,6 +42,11 @@ describe('createGlider scene graph', () => {
     ]) {
       expect(names, `missing ${required}`).toContain(required);
     }
+
+    const left = visual.root.getObjectByName('LeftRiser')!;
+    const right = visual.root.getObjectByName('RightRiser')!;
+    expect(right.position.x - left.position.x).toBeGreaterThan(0.3);
+    expect(right.position.x - left.position.x).toBeLessThan(0.42);
 
     expect(visual.canopy.position.y).toBeGreaterThan(2.5);
     expect(visual.root.getObjectByName('Pilot')!.position.y).toBeLessThan(visual.canopy.position.y);

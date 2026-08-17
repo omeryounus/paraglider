@@ -50,8 +50,31 @@ interface LineBind {
   spanT: number;
 }
 
-const _a = new THREE.Vector3();
-const _b = new THREE.Vector3();
+const BANDS = ['A', 'B', 'C', 'D'] as const;
+type Band = (typeof BANDS)[number];
+const RISER_HALF = 0.18;
+const CORD_COLOR = 0x2a2e32;
+const _c = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _riserL = new THREE.Vector3();
+const _riserR = new THREE.Vector3();
+const _handL = new THREE.Vector3();
+const _handR = new THREE.Vector3();
+const _gL = new THREE.Vector3();
+const _gR = new THREE.Vector3();
+const _gather: Record<'L' | 'R', Record<Band, THREE.Vector3>> = {
+  L: { A: new THREE.Vector3(), B: new THREE.Vector3(), C: new THREE.Vector3(), D: new THREE.Vector3() },
+  R: { A: new THREE.Vector3(), B: new THREE.Vector3(), C: new THREE.Vector3(), D: new THREE.Vector3() },
+};
+const _topScratch: THREE.Vector3[] = [];
+function scratchTop(i: number): THREE.Vector3 {
+  if (!_topScratch[i]) _topScratch[i] = new THREE.Vector3();
+  return _topScratch[i];
+}
+
+function bandOf(type: LineBind['type']): Band {
+  return type === 'brake' ? 'D' : type;
+}
 
 export function createGlider(): GliderVisual {
   const root = new THREE.Group();
@@ -64,14 +87,16 @@ export function createGlider(): GliderVisual {
   // 1. Aerodynamic Ram-Air Canopy Mesh with NACA Camber & Open Intakes
   const { geometry, binds, brakeBinds } = createAirfoil();
 
-  // Translucent ruby fabric material with sun backlight effect
+  // Ripstop nylon: matte fabric, not plastic
   const wingMat = new THREE.MeshStandardMaterial({
     vertexColors: true,
-    roughness: 0.36,
-    metalness: 0.03,
+    roughness: 0.52,
+    metalness: 0.02,
     side: THREE.DoubleSide,
     shadowSide: THREE.DoubleSide,
     fog: true,
+    normalMap: ripstopNormal(),
+    normalScale: new THREE.Vector2(0.45, 0.45),
   });
 
   // Shader enhancement for sun backlight transmission through ripstop nylon
@@ -103,31 +128,49 @@ export function createGlider(): GliderVisual {
   root.add(pilot.group);
   root.add(canopy);
 
-  // 4. Cascade Suspension Lines (A, B, C, D Lines)
+  // 4. Upper cascade (canopy → A/B/C/D gathers). Lower 3–4 webbings are meshes.
   const lineCount = binds.length;
   const linePos = new Float32Array(lineCount * 2 * 3);
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
   const lineMat = new THREE.LineBasicMaterial({
-    color: 0x14181c,
-    linewidth: 1,
+    color: CORD_COLOR,
     transparent: true,
-    opacity: 0.88,
+    opacity: 0.62,
+    depthWrite: false,
   });
   const lines = new THREE.LineSegments(lineGeo, lineMat);
   lines.name = 'Suspension';
   root.add(lines);
 
-  // 5. Dynamic High-Vis Brake Lines (Connected directly from trailing edge down into pilot hands)
-  const brakeCount = brakeBinds.length;
+  const webbing: THREE.Mesh[] = [];
+  const webMat = new THREE.MeshStandardMaterial({
+    color: 0x2c3036,
+    roughness: 0.84,
+    metalness: 0.06,
+    fog: true,
+  });
+  const webGeo = new THREE.CylinderGeometry(0.014, 0.02, 1, 6);
+  for (const side of ['Left', 'Right'] as const) {
+    for (const band of BANDS) {
+      const mesh = new THREE.Mesh(webGeo, webMat);
+      mesh.name = `${side}RiserWeb_${band}`;
+      mesh.castShadow = true;
+      root.add(mesh);
+      webbing.push(mesh);
+    }
+  }
+
+  // 5. Brake fans use the same aramid cord (no high-vis red)
+  const brakeCount = brakeBinds.length + 2;
   const brakeLinePos = new Float32Array(brakeCount * 2 * 3);
   const brakeLineGeo = new THREE.BufferGeometry();
   brakeLineGeo.setAttribute('position', new THREE.BufferAttribute(brakeLinePos, 3));
   const brakeLineMat = new THREE.LineBasicMaterial({
-    color: 0xd82418,
-    linewidth: 1.5,
+    color: CORD_COLOR,
     transparent: true,
-    opacity: 0.95,
+    opacity: 0.58,
+    depthWrite: false,
   });
   const brakeLines = new THREE.LineSegments(brakeLineGeo, brakeLineMat);
   brakeLines.name = 'BrakeLines';
@@ -140,6 +183,7 @@ export function createGlider(): GliderVisual {
     binds,
     brakeBinds,
     rest: restPos,
+    webbing,
   };
 
   return {
@@ -355,6 +399,42 @@ function skin(color: number, rough = 0.65, metal = 0.06): THREE.MeshStandardMate
   });
 }
 
+let _ripstop: THREE.DataTexture | null = null;
+function ripstopNormal(): THREE.DataTexture {
+  if (_ripstop) return _ripstop;
+  const size = 256;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const grid = (Math.sin(x * 0.48) + Math.sin(y * 0.48)) * 0.12;
+      const wrinkle =
+        Math.sin(x * 0.07 + y * 0.031) * 0.55 + Math.sin(y * 0.09 - x * 0.04) * 0.4 + grid;
+      const wx = wrinkle + Math.sin((x + y) * 0.21) * 0.18;
+      const wy = wrinkle * 0.85 + Math.sin((y - x) * 0.19) * 0.2;
+      const i = (y * size + x) * 4;
+      data[i] = 128 + wx * 36;
+      data[i + 1] = 128 + wy * 36;
+      data[i + 2] = 255;
+      data[i + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(10, 5);
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.needsUpdate = true;
+  _ripstop = tex;
+  return tex;
+}
+
+function stretchCylinder(mesh: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3): void {
+  const dir = _c.copy(b).sub(a);
+  const len = dir.length();
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);
+  mesh.scale.set(1, Math.max(0.04, len), 1);
+  if (len > 1e-5) mesh.quaternion.setFromUnitVectors(_up, dir.multiplyScalar(1 / len));
+}
+
 function createPilot(): PilotRig {
   const group = new THREE.Group();
   group.name = 'Pilot';
@@ -363,9 +443,38 @@ function createPilot(): PilotRig {
   const pants = skin(0x12151a, 0.72, 0.05);
   const flesh = skin(0xd49b6a, 0.55);
   const bootMat = skin(0x0e1012, 0.4, 0.2);
+  const webbingMat = skin(0x2a241c, 0.78, 0.04);
+  const carbon = skin(0x16181c, 0.42, 0.22);
 
   const harness = new THREE.Group();
   harness.name = 'Harness';
+
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.09, 0.3), webbingMat);
+  seat.name = 'SeatBase';
+  seat.position.set(0, -0.02, 0.07);
+  seat.castShadow = true;
+
+  const pack = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.36, 0.16), webbingMat);
+  pack.name = 'HarnessPack';
+  pack.position.set(0, 0.16, -0.13);
+  pack.castShadow = true;
+
+  const hipBelt = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.055, 0.16), webbingMat);
+  hipBelt.name = 'HipBelt';
+  hipBelt.position.set(0, 0.05, 0.04);
+
+  const leftCarabiner = new THREE.Mesh(
+    new THREE.TorusGeometry(0.028, 0.006, 6, 10),
+    carbon,
+  );
+  leftCarabiner.name = 'LeftCarabiner';
+  leftCarabiner.position.set(-RISER_HALF, 0.34, 0.05);
+  leftCarabiner.rotation.z = Math.PI / 2;
+  const rightCarabiner = leftCarabiner.clone();
+  rightCarabiner.name = 'RightCarabiner';
+  rightCarabiner.position.x = RISER_HALF;
+
+  harness.add(seat, pack, hipBelt, leftCarabiner, rightCarabiner);
 
   const torso = new THREE.Group();
   torso.name = 'Torso';
@@ -425,7 +534,7 @@ function createPilot(): PilotRig {
   head.add(headShell, eye);
   torso.add(head);
 
-  // --- 4. Arms Raised Holding Red Brake Toggles Up at Ear Level ---
+  // Elbows out, hands at ear height on the rear brake toggles
   const makeArm = (side: number): {
     armRoot: THREE.Group;
     hand: THREE.Mesh;
@@ -434,30 +543,33 @@ function createPilot(): PilotRig {
     const tag = side < 0 ? 'Left' : 'Right';
     const armRoot = new THREE.Group();
     armRoot.name = `${tag}Arm`;
-    armRoot.position.set(side * 0.18, 0.26, 0.04);
-    armRoot.rotation.z = side * 0.42;
-    armRoot.rotation.x = 0.45;
+    armRoot.position.set(side * 0.19, 0.3, 0.02);
+    armRoot.rotation.z = side * 0.62;
+    armRoot.rotation.x = 0.12;
 
-    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.042, 0.20, 3, 6), jacket);
+    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.042, 0.2, 3, 6), jacket);
     upper.name = `${tag}UpperArm`;
-    upper.position.set(0, 0.10, 0.08);
+    upper.position.set(0, 0.08, 0.05);
+    upper.rotation.x = -0.35;
     upper.castShadow = true;
 
     const lower = new THREE.Mesh(new THREE.CapsuleGeometry(0.036, 0.18, 3, 6), jacket);
     lower.name = `${tag}Forearm`;
-    lower.position.set(0, 0.22, 0.22);
+    lower.position.set(side * 0.02, 0.2, 0.02);
+    lower.rotation.x = -1.05;
+    lower.rotation.z = side * -0.15;
     lower.castShadow = true;
 
     const hand = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 6), flesh);
     hand.name = `${tag}Hand`;
-    hand.position.set(0, 0.28, 0.32);
+    hand.position.set(side * 0.01, 0.32, -0.02);
     hand.castShadow = true;
 
-    // High-vis Red Brake Toggle Ring
     const toggle = new THREE.Mesh(
-      new THREE.TorusGeometry(0.036, 0.009, 6, 12),
-      new THREE.MeshStandardMaterial({ color: 0xd82418, roughness: 0.28 }),
+      new THREE.TorusGeometry(0.034, 0.008, 6, 12),
+      new THREE.MeshStandardMaterial({ color: 0x8a1c16, roughness: 0.45, fog: true }),
     );
+    toggle.name = `${tag}Toggle`;
     toggle.rotation.x = Math.PI / 2;
     hand.add(toggle);
 
@@ -507,11 +619,18 @@ function createPilot(): PilotRig {
 
   const leftRiser = new THREE.Object3D();
   leftRiser.name = 'LeftRiser';
-  leftRiser.position.set(-0.16, 0.22, 0.08);
+  leftRiser.position.set(-RISER_HALF, 0.34, 0.05);
   const rightRiser = new THREE.Object3D();
   rightRiser.name = 'RightRiser';
-  rightRiser.position.set(0.16, 0.22, 0.08);
-  harness.add(leftRiser, rightRiser);
+  rightRiser.position.set(RISER_HALF, 0.34, 0.05);
+
+  const leftBrake = new THREE.Object3D();
+  leftBrake.name = 'LeftBrakeAnchor';
+  leftBrake.position.set(-0.2, 0.5, 0.08);
+  const rightBrake = new THREE.Object3D();
+  rightBrake.name = 'RightBrakeAnchor';
+  rightBrake.position.set(0.2, 0.5, 0.08);
+  harness.add(leftRiser, rightRiser, leftBrake, rightBrake);
 
   group.add(harness, torso, legs);
 
@@ -524,13 +643,13 @@ function createPilot(): PilotRig {
     rightArm: rightArmData.armRoot,
     leftHand: leftArmData.hand,
     rightHand: rightArmData.hand,
-    leftToggle: leftArmData.toggle,
-    rightToggle: rightArmData.toggle,
+    leftToggle: leftBrake,
+    rightToggle: rightBrake,
     legs,
     leftRiser,
     rightRiser,
     restTorsoX: 0.22,
-    restArmX: 0.45,
+    restArmX: 0.12,
   };
 }
 
@@ -573,9 +692,9 @@ export function poseGlider(
   const leftPull = flight.leftBrake + (flight.flare ? 0.4 : 0);
   const rightPull = flight.rightBrake + (flight.flare ? 0.4 : 0);
 
-  // When pulling brake, arm moves from high rest (0.45) downward towards waist (-0.6)
-  pilot.leftArm.rotation.x = damp(pilot.leftArm.rotation.x, pilot.restArmX - leftPull * 1.15, 12, dt);
-  pilot.rightArm.rotation.x = damp(pilot.rightArm.rotation.x, pilot.restArmX - rightPull * 1.15, 12, dt);
+  // Rest is ear-level; pull drops the hands toward the hips
+  pilot.leftArm.rotation.x = damp(pilot.leftArm.rotation.x, pilot.restArmX - leftPull * 1.05, 12, dt);
+  pilot.rightArm.rotation.x = damp(pilot.rightArm.rotation.x, pilot.restArmX - rightPull * 1.05, 12, dt);
 
   // Speed bar pushes legs slightly forward
   if (pilot.legs) {
@@ -639,24 +758,65 @@ function deformCanopy(
 
 function updateSuspensionLines(visual: GliderVisual, pilot: PilotRig): void {
   const binds = visual.root.userData.binds as LineBind[];
+  const webbing = visual.root.userData.webbing as THREE.Mesh[];
   const linePos = visual.lines.geometry.getAttribute('position') as THREE.BufferAttribute;
   const pos = visual.wing.geometry.getAttribute('position') as THREE.BufferAttribute;
 
+  const counts: Record<'L' | 'R', Record<Band, number>> = {
+    L: { A: 0, B: 0, C: 0, D: 0 },
+    R: { A: 0, B: 0, C: 0, D: 0 },
+  };
+  for (const side of ['L', 'R'] as const) {
+    for (const band of BANDS) _gather[side][band].set(0, 0, 0);
+  }
+
   for (let i = 0; i < binds.length; i++) {
     const bind = binds[i];
-    _a.set(pos.getX(bind.vert), pos.getY(bind.vert), pos.getZ(bind.vert));
-    visual.canopy.localToWorld(_a);
-    visual.root.worldToLocal(_a);
+    const top = scratchTop(i).set(pos.getX(bind.vert), pos.getY(bind.vert), pos.getZ(bind.vert));
+    visual.canopy.localToWorld(top);
+    visual.root.worldToLocal(top);
+    const band = bandOf(bind.type);
+    _gather[bind.side][band].add(top);
+    counts[bind.side][band] += 1;
+  }
 
-    // Anchor to corresponding left or right riser maillon above pilot shoulders
-    const riser = bind.side === 'L' ? pilot.leftRiser : pilot.rightRiser;
-    riser.getWorldPosition(_b);
-    visual.root.worldToLocal(_b);
+  pilot.leftRiser.getWorldPosition(_riserL);
+  visual.root.worldToLocal(_riserL);
+  pilot.rightRiser.getWorldPosition(_riserR);
+  visual.root.worldToLocal(_riserR);
+  const riserOf = { L: _riserL, R: _riserR };
 
-    linePos.setXYZ(i * 2, _a.x, _a.y, _a.z);
-    linePos.setXYZ(i * 2 + 1, _b.x, _b.y, _b.z);
+  const bandZ: Record<Band, number> = { A: -0.11, B: -0.03, C: 0.05, D: 0.13 };
+  for (const side of ['L', 'R'] as const) {
+    const riser = riserOf[side];
+    for (const band of BANDS) {
+      const n = counts[side][band];
+      const g = _gather[side][band];
+      if (n > 0) g.multiplyScalar(1 / n);
+      else g.copy(riser).y += 1.6;
+      g.lerp(riser, 0.3);
+      g.z += bandZ[band];
+      g.x += side === 'L' ? -0.12 : 0.12;
+    }
+  }
+
+  for (let i = 0; i < binds.length; i++) {
+    const bind = binds[i];
+    const top = scratchTop(i);
+    const g = _gather[bind.side][bandOf(bind.type)];
+    linePos.setXYZ(i * 2, top.x, top.y, top.z);
+    linePos.setXYZ(i * 2 + 1, g.x, g.y, g.z);
   }
   linePos.needsUpdate = true;
+
+  let w = 0;
+  for (const side of ['L', 'R'] as const) {
+    const riser = riserOf[side];
+    for (const band of BANDS) {
+      stretchCylinder(webbing[w], _gather[side][band], riser);
+      w += 1;
+    }
+  }
 }
 
 function updateBrakeLines(visual: GliderVisual, pilot: PilotRig): void {
@@ -664,20 +824,49 @@ function updateBrakeLines(visual: GliderVisual, pilot: PilotRig): void {
   const linePos = visual.brakeLines.geometry.getAttribute('position') as THREE.BufferAttribute;
   const pos = visual.wing.geometry.getAttribute('position') as THREE.BufferAttribute;
 
+  let nL = 0;
+  let nR = 0;
+  _gL.set(0, 0, 0);
+  _gR.set(0, 0, 0);
+
   for (let i = 0; i < brakeBinds.length; i++) {
     const bind = brakeBinds[i];
-    _a.set(pos.getX(bind.vert), pos.getY(bind.vert), pos.getZ(bind.vert));
-    visual.canopy.localToWorld(_a);
-    visual.root.worldToLocal(_a);
-
-    // Connect trailing edge brake fan directly to the pilot's left or right hand toggle
-    const hand = bind.side === 'L' ? pilot.leftHand : pilot.rightHand;
-    hand.getWorldPosition(_b);
-    visual.root.worldToLocal(_b);
-
-    linePos.setXYZ(i * 2, _a.x, _a.y, _a.z);
-    linePos.setXYZ(i * 2 + 1, _b.x, _b.y, _b.z);
+    const top = scratchTop(i).set(
+      pos.getX(bind.vert),
+      pos.getY(bind.vert),
+      pos.getZ(bind.vert),
+    );
+    visual.canopy.localToWorld(top);
+    visual.root.worldToLocal(top);
+    if (bind.side === 'L') {
+      _gL.add(top);
+      nL += 1;
+    } else {
+      _gR.add(top);
+      nR += 1;
+    }
   }
+
+  (visual.root.userData.brakeLeft ?? pilot.leftToggle).getWorldPosition(_handL);
+  (visual.root.userData.brakeRight ?? pilot.rightToggle).getWorldPosition(_handR);
+  visual.root.worldToLocal(_handL);
+  visual.root.worldToLocal(_handR);
+
+  if (nL) _gL.multiplyScalar(1 / nL).lerp(_handL, 0.52);
+  else _gL.copy(_handL).y += 0.8;
+  if (nR) _gR.multiplyScalar(1 / nR).lerp(_handR, 0.52);
+  else _gR.copy(_handR).y += 0.8;
+
+  for (let i = 0; i < brakeBinds.length; i++) {
+    const top = scratchTop(i);
+    const g = brakeBinds[i].side === 'L' ? _gL : _gR;
+    linePos.setXYZ(i * 2, top.x, top.y, top.z);
+    linePos.setXYZ(i * 2 + 1, g.x, g.y, g.z);
+  }
+  linePos.setXYZ(brakeBinds.length * 2, _gL.x, _gL.y, _gL.z);
+  linePos.setXYZ(brakeBinds.length * 2 + 1, _handL.x, _handL.y, _handL.z);
+  linePos.setXYZ(brakeBinds.length * 2 + 2, _gR.x, _gR.y, _gR.z);
+  linePos.setXYZ(brakeBinds.length * 2 + 3, _handR.x, _handR.y, _handR.z);
   linePos.needsUpdate = true;
 }
 
@@ -718,6 +907,7 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
   const parachute =
     (await loadGlbScene('/models/parachute.glb')) ?? (await loadGlbScene('/models/canopy.glb'));
   const person = (await loadGlbScene('/models/person.glb')) ?? (await loadGlbScene('/models/pilot.glb'));
+  const fabric = ripstopNormal();
 
   if (parachute) {
     parachute.name = 'Hyper3D_Parachute';
@@ -725,6 +915,20 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
     const center = box.getCenter(new THREE.Vector3());
     parachute.position.sub(center);
     parachute.position.y -= box.min.y;
+    parachute.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const raw of mats) {
+        const mat = raw as THREE.MeshStandardMaterial;
+        if (!mat?.isMeshStandardMaterial) continue;
+        mat.roughness = 0.56;
+        mat.metalness = 0;
+        mat.normalMap = fabric;
+        mat.normalScale = new THREE.Vector2(0.62, 0.62);
+        mat.needsUpdate = true;
+      }
+    });
     visual.wing.visible = false;
     visual.canopy.add(parachute);
     visual.root.userData.blenderCanopy = true;
@@ -732,23 +936,76 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
 
   if (person) {
     person.name = 'Hyper3D_Person';
-    const box = fitAsset(person, 1.7, 'y');
+    const box = fitAsset(person, 1.7 * 1.18, 'y');
     const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
     person.position.x -= center.x;
     person.position.z -= center.z;
     person.position.y -= box.min.y;
-    const seat = visual.root.getObjectByName('SeatPlate');
-    const bucket = visual.root.getObjectByName('HarnessBucket');
-    if (seat) seat.visible = false;
-    if (bucket) bucket.visible = false;
-    const procedural = visual.root.getObjectByName('Pilot');
-    if (procedural) {
-      procedural.traverse((child) => {
-        const mesh = child as THREE.Mesh;
-        if (mesh.isMesh) mesh.visible = false;
-      });
+    person.rotation.x = 0.22;
+    person.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const raw of mats) {
+        const mat = raw as THREE.MeshStandardMaterial;
+        if (!mat?.isMeshStandardMaterial) continue;
+        mat.roughness = Math.max(mat.roughness ?? 0.5, 0.58);
+        mat.metalness = Math.min(mat.metalness ?? 0.08, 0.12);
+        mat.needsUpdate = true;
+      }
+    });
+
+    const harness = visual.root.getObjectByName('Harness');
+    const harnessY = size.y * 0.4;
+    const harnessScale = 1.08;
+    if (harness) {
+      harness.position.set(0, harnessY, 0.03);
+      harness.scale.setScalar(harnessScale);
+      visual.leftRiser.position.set(-0.165, 0.4, 0.08);
+      visual.rightRiser.position.set(0.165, 0.4, 0.08);
+      const leftCar = harness.getObjectByName('LeftCarabiner');
+      const rightCar = harness.getObjectByName('RightCarabiner');
+      if (leftCar) leftCar.position.copy(visual.leftRiser.position);
+      if (rightCar) rightCar.position.copy(visual.rightRiser.position);
     }
-    visual.root.add(person);
+
+    const earLocalY = (size.y * 0.72 - harnessY) / harnessScale;
+    visual.leftToggle.position.set(-0.2, earLocalY, 0.1);
+    visual.rightToggle.position.set(0.2, earLocalY, 0.1);
+    visual.root.userData.brakeLeft = visual.leftToggle;
+    visual.root.userData.brakeRight = visual.rightToggle;
+
+    const gripMat = new THREE.MeshStandardMaterial({ color: 0x7a1e18, roughness: 0.5, fog: true });
+    for (const anchor of [visual.leftToggle, visual.rightToggle]) {
+      if (anchor.children.length === 0) {
+        const grip = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 6, 10), gripMat);
+        grip.rotation.x = Math.PI / 2;
+        anchor.add(grip);
+      }
+    }
+
+    const hide = new Set(['Chest', 'Head', 'Neck', 'Helmet', 'HeadShell']);
+    visual.root.getObjectByName('Pilot')?.traverse((child) => {
+      if (child.name === 'Harness' || child.name.endsWith('Riser') || child.name.endsWith('Toggle')) {
+        return;
+      }
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const underHarness = mesh.parent?.name === 'Harness' || mesh.name.startsWith('Harness')
+        || mesh.name === 'SeatBase' || mesh.name === 'HarnessPack' || mesh.name === 'HipBelt'
+        || mesh.name.includes('Carabiner');
+      if (underHarness) return;
+      if (hide.has(mesh.name) || mesh.name.includes('Arm') || mesh.name.includes('Hand')
+        || mesh.name.includes('Leg') || mesh.name.includes('Foot') || mesh.name.includes('Thigh')
+        || mesh.name.includes('Shin') || mesh.name.includes('Forearm') || mesh.name === 'Visor') {
+        mesh.visible = false;
+      }
+    });
+
+    const pilot = visual.root.userData.pilot as PilotRig;
+    person.position.y -= 0.08;
+    pilot.group.add(person);
     visual.root.userData.hyper3dPerson = person;
   }
 }

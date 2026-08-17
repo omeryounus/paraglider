@@ -24,6 +24,6 @@ export const STORAGE_KEY = 'aero-glide-progress';
 // Paraglider 3D Geometry Constants
 export const SPAN = 9.23;
 export const CHORD = 2.28;
-export const CANOPY_Y = 3.2;
+export const CANOPY_Y = 3.65;
 export const SEGS_X = 24;
 export const SEGS_Z = 16;

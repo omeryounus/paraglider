@@ -8,9 +8,11 @@ const SUN_DISTANCE = 1000;
 export interface Atmosphere {
   sky: Sky;
   sun: THREE.DirectionalLight;
+  rim: THREE.DirectionalLight;
   hemi: THREE.HemisphereLight;
   fill: THREE.AmbientLight;
   sunDir: THREE.Vector3;
+  rimDir: THREE.Vector3;
   dispose: (scene: THREE.Scene) => void;
 }
 
@@ -67,14 +69,27 @@ export function createAtmosphere(_level: LevelDef, scene: THREE.Scene): Atmosphe
   sun.position.copy(sunDir).multiplyScalar(SUN_DISTANCE);
   scene.add(sun);
   scene.add(sun.target);
+
+  const rimDir = sunDir.clone().multiplyScalar(-1);
+  rimDir.y = Math.max(0.42, Math.abs(rimDir.y) * 0.35 + 0.38);
+  rimDir.normalize();
+  const rim = new THREE.DirectionalLight(0xd5e4ff, 0.78);
+  rim.name = 'PilotRim';
+  rim.castShadow = false;
+  rim.position.copy(rimDir).multiplyScalar(220);
+  scene.add(rim);
+  scene.add(rim.target);
+
   return {
     sky,
     sun,
+    rim,
     hemi,
     fill,
     sunDir,
+    rimDir,
     dispose: (host) => {
-      host.remove(sky, sun, hemi, fill, sun.target);
+      host.remove(sky, sun, rim, hemi, fill, sun.target, rim.target);
       sky.geometry.dispose();
       (sky.material as THREE.Material).dispose();
     },
@@ -85,4 +100,7 @@ export function trackSun(atmo: Atmosphere, focus: THREE.Vector3): void {
   atmo.sun.target.position.copy(focus);
   atmo.sun.position.copy(focus).addScaledVector(atmo.sunDir, SUN_DISTANCE);
   atmo.sun.target.updateMatrixWorld();
+  atmo.rim.target.position.copy(focus);
+  atmo.rim.position.copy(focus).addScaledVector(atmo.rimDir, 90);
+  atmo.rim.target.updateMatrixWorld();
 }
