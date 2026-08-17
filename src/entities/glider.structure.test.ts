@@ -26,7 +26,6 @@ describe('createGlider scene graph', () => {
       'LeftFoot',
       'RightFoot',
       'Harness',
-      'SeatPlate',
       'ChestStrap',
       'LeftRiser',
       'RightRiser',

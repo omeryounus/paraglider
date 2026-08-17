@@ -362,27 +362,10 @@ function createPilot(): PilotRig {
   const jacket = skin(0x181e26, 0.65, 0.08);
   const pants = skin(0x12151a, 0.72, 0.05);
   const flesh = skin(0xd49b6a, 0.55);
-  const harnessMat = new THREE.MeshStandardMaterial({
-    color: 0x15181e,
-    roughness: 0.42,
-    metalness: 0.22,
-    fog: true,
-  });
   const bootMat = skin(0x0e1012, 0.4, 0.2);
 
   const harness = new THREE.Group();
   harness.name = 'Harness';
-  const harnessBucket = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 12), harnessMat);
-  harnessBucket.name = 'HarnessBucket';
-  harnessBucket.scale.set(0.82, 0.88, 0.74);
-  harnessBucket.position.set(0, 0.06, 0.06);
-  harnessBucket.castShadow = true;
-
-  const seatBottom = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.08, 0.42), harnessMat);
-  seatBottom.name = 'SeatPlate';
-  seatBottom.position.set(0, -0.04, 0.12);
-  seatBottom.castShadow = true;
-  harness.add(harnessBucket, seatBottom);
 
   const torso = new THREE.Group();
   torso.name = 'Torso';
@@ -698,26 +681,74 @@ function updateBrakeLines(visual: GliderVisual, pilot: PilotRig): void {
   linePos.needsUpdate = true;
 }
 
-export async function attachStudioAssets(_visual: GliderVisual): Promise<void> {
+async function loadGlbScene(url: string): Promise<THREE.Group | null> {
   try {
-    const loader = new GLTFLoader();
-    const gltf = await loader.loadAsync('/models/paraglider.glb');
-    if (gltf && gltf.scene) {
-      const model = gltf.scene;
-      model.traverse((child) => {
-        const mesh = child as THREE.Mesh;
-        if (mesh.isMesh && mesh.material) {
-          mesh.castShadow = true;
-          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          mats.forEach((m) => {
-            if (m && 'fog' in m) {
-              (m as THREE.MeshStandardMaterial).fog = true;
-            }
-          });
+    const gltf = await new GLTFLoader().loadAsync(url);
+    const scene = gltf.scene;
+    scene.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = false;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const raw of mats) {
+        const mat = raw as THREE.MeshStandardMaterial;
+        if (mat?.isMeshStandardMaterial) {
+          mat.fog = true;
+          mat.side = THREE.DoubleSide;
         }
+      }
+    });
+    return scene;
+  } catch {
+    return null;
+  }
+}
+
+function fitAsset(src: THREE.Object3D, targetSpan: number, axis: 'x' | 'y'): THREE.Box3 {
+  const box = new THREE.Box3().setFromObject(src);
+  const size = box.getSize(new THREE.Vector3());
+  const span = axis === 'x' ? size.x : size.y;
+  if (span > 1e-4) src.scale.multiplyScalar(targetSpan / span);
+  src.updateMatrixWorld(true);
+  return new THREE.Box3().setFromObject(src);
+}
+
+export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
+  const parachute =
+    (await loadGlbScene('/models/parachute.glb')) ?? (await loadGlbScene('/models/canopy.glb'));
+  const person = (await loadGlbScene('/models/person.glb')) ?? (await loadGlbScene('/models/pilot.glb'));
+
+  if (parachute) {
+    parachute.name = 'Hyper3D_Parachute';
+    const box = fitAsset(parachute, SPAN, 'x');
+    const center = box.getCenter(new THREE.Vector3());
+    parachute.position.sub(center);
+    parachute.position.y -= box.min.y;
+    visual.wing.visible = false;
+    visual.canopy.add(parachute);
+    visual.root.userData.blenderCanopy = true;
+  }
+
+  if (person) {
+    person.name = 'Hyper3D_Person';
+    const box = fitAsset(person, 1.7, 'y');
+    const center = box.getCenter(new THREE.Vector3());
+    person.position.x -= center.x;
+    person.position.z -= center.z;
+    person.position.y -= box.min.y;
+    const seat = visual.root.getObjectByName('SeatPlate');
+    const bucket = visual.root.getObjectByName('HarnessBucket');
+    if (seat) seat.visible = false;
+    if (bucket) bucket.visible = false;
+    const procedural = visual.root.getObjectByName('Pilot');
+    if (procedural) {
+      procedural.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (mesh.isMesh) mesh.visible = false;
       });
     }
-  } catch {
-    // Falls back cleanly to procedural high-fidelity canopy & pilot rig
+    visual.root.add(person);
+    visual.root.userData.hyper3dPerson = person;
   }
 }
