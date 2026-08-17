@@ -58,7 +58,7 @@ export function createGlider(): GliderVisual {
   root.name = 'Paraglider';
 
   const canopy = new THREE.Group();
-  canopy.name = 'CanopyRig';
+  canopy.name = 'Canopy';
   canopy.position.y = CANOPY_Y;
 
   // 1. Aerodynamic Ram-Air Canopy Mesh with NACA Camber & Open Intakes
@@ -89,7 +89,7 @@ export function createGlider(): GliderVisual {
   };
 
   const wing = new THREE.Mesh(geometry, wingMat);
-  wing.name = 'CanopyMesh';
+  wing.name = 'Wing';
   wing.castShadow = true;
   wing.receiveShadow = true;
   canopy.add(wing);
@@ -115,7 +115,7 @@ export function createGlider(): GliderVisual {
     opacity: 0.88,
   });
   const lines = new THREE.LineSegments(lineGeo, lineMat);
-  lines.name = 'CascadeLines';
+  lines.name = 'Suspension';
   root.add(lines);
 
   // 5. Dynamic High-Vis Brake Lines (Connected directly from trailing edge down into pilot hands)
@@ -357,7 +357,7 @@ function skin(color: number, rough = 0.65, metal = 0.06): THREE.MeshStandardMate
 
 function createPilot(): PilotRig {
   const group = new THREE.Group();
-  group.name = 'PilotRig';
+  group.name = 'Pilot';
 
   const jacket = skin(0x181e26, 0.65, 0.08);
   const pants = skin(0x12151a, 0.72, 0.05);
@@ -370,40 +370,45 @@ function createPilot(): PilotRig {
   });
   const bootMat = skin(0x0e1012, 0.4, 0.2);
 
-  // --- 1. Open Seated Harness (Anatomical Bucket Seat) ---
-  const harnessBucket = new THREE.Mesh(
-    new THREE.SphereGeometry(0.32, 16, 12),
-    harnessMat,
-  );
+  const harness = new THREE.Group();
+  harness.name = 'Harness';
+  const harnessBucket = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 12), harnessMat);
+  harnessBucket.name = 'HarnessBucket';
   harnessBucket.scale.set(0.82, 0.88, 0.74);
   harnessBucket.position.set(0, 0.06, 0.06);
   harnessBucket.castShadow = true;
 
-  const seatBottom = new THREE.Mesh(
-    new THREE.BoxGeometry(0.38, 0.08, 0.42),
-    harnessMat,
-  );
+  const seatBottom = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.08, 0.42), harnessMat);
+  seatBottom.name = 'SeatPlate';
   seatBottom.position.set(0, -0.04, 0.12);
   seatBottom.castShadow = true;
+  harness.add(harnessBucket, seatBottom);
 
-  // --- 2. Pilot Torso (Seated Upright/Slight Recline) ---
   const torso = new THREE.Group();
+  torso.name = 'Torso';
   torso.position.set(0, 0.18, 0.04);
   torso.rotation.x = 0.22;
 
   const chest = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.28, 4, 8), jacket);
+  chest.name = 'Chest';
   chest.position.set(0, 0.16, 0.02);
   chest.castShadow = true;
 
-  // Harness chest strap & quick release buckle
   const chestStrap = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.08), skin(0xba2222, 0.4));
+  chestStrap.name = 'ChestStrap';
   chestStrap.position.set(0, 0.18, 0.08);
   torso.add(chest, chestStrap);
 
-  // --- 3. Head & Sleek Black Helmet ---
   const head = new THREE.Group();
+  head.name = 'Head';
   head.position.set(0, 0.42, 0.08);
+  const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.034, 0.04, 4, 8), flesh);
+  neck.name = 'Neck';
+  neck.position.set(0, -0.04, 0.01);
+  neck.castShadow = true;
+  head.add(neck);
   const headShell = new THREE.Group();
+  headShell.name = 'HeadShell';
 
   const helmet = new THREE.Mesh(
     new THREE.SphereGeometry(0.13, 18, 14),
@@ -414,6 +419,7 @@ function createPilot(): PilotRig {
       fog: true,
     }),
   );
+  helmet.name = 'Helmet';
   helmet.scale.set(1.02, 1.12, 1.14);
   helmet.castShadow = true;
 
@@ -442,20 +448,25 @@ function createPilot(): PilotRig {
     hand: THREE.Mesh;
     toggle: THREE.Object3D;
   } => {
+    const tag = side < 0 ? 'Left' : 'Right';
     const armRoot = new THREE.Group();
+    armRoot.name = `${tag}Arm`;
     armRoot.position.set(side * 0.18, 0.26, 0.04);
     armRoot.rotation.z = side * 0.42;
-    armRoot.rotation.x = 0.45; // Raised upward towards the risers
+    armRoot.rotation.x = 0.45;
 
     const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.042, 0.20, 3, 6), jacket);
+    upper.name = `${tag}UpperArm`;
     upper.position.set(0, 0.10, 0.08);
     upper.castShadow = true;
 
     const lower = new THREE.Mesh(new THREE.CapsuleGeometry(0.036, 0.18, 3, 6), jacket);
+    lower.name = `${tag}Forearm`;
     lower.position.set(0, 0.22, 0.22);
     lower.castShadow = true;
 
     const hand = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 6), flesh);
+    hand.name = `${tag}Hand`;
     hand.position.set(0, 0.28, 0.32);
     hand.castShadow = true;
 
@@ -480,23 +491,25 @@ function createPilot(): PilotRig {
   legs.position.set(0, 0, 0);
 
   const makeLeg = (side: number): THREE.Group => {
+    const tag = side < 0 ? 'Left' : 'Right';
     const legRoot = new THREE.Group();
+    legRoot.name = `${tag}Leg`;
     legRoot.position.set(side * 0.11, 0.02, 0.12);
 
-    // Thigh angled slightly forward/up
     const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.054, 0.26, 4, 8), pants);
+    thigh.name = `${tag}Thigh`;
     thigh.rotation.x = 0.52;
     thigh.position.set(0, 0.04, 0.08);
     thigh.castShadow = true;
 
-    // Shin angled downward from knee
     const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.044, 0.24, 4, 8), pants);
+    shin.name = `${tag}Shin`;
     shin.rotation.x = -1.05;
     shin.position.set(0, -0.14, 0.22);
     shin.castShadow = true;
 
-    // Flight Boot at foot
     const boot = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 0.18), bootMat);
+    boot.name = `${tag}Foot`;
     boot.position.set(0, -0.28, 0.28);
     boot.rotation.x = 0.2;
     boot.castShadow = true;
@@ -509,13 +522,15 @@ function createPilot(): PilotRig {
   const legR = makeLeg(1);
   legs.add(legL, legR);
 
-  // Carabiners and Main Risers
   const leftRiser = new THREE.Object3D();
-  leftRiser.position.set(-0.35, 0.58, 0.04);
+  leftRiser.name = 'LeftRiser';
+  leftRiser.position.set(-0.16, 0.22, 0.08);
   const rightRiser = new THREE.Object3D();
-  rightRiser.position.set(0.35, 0.58, 0.04);
+  rightRiser.name = 'RightRiser';
+  rightRiser.position.set(0.16, 0.22, 0.08);
+  harness.add(leftRiser, rightRiser);
 
-  group.add(harnessBucket, seatBottom, torso, legs, leftRiser, rightRiser);
+  group.add(harness, torso, legs);
 
   return {
     group,

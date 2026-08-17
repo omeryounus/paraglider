@@ -121,6 +121,7 @@ export function stepPhysics(ctx: PhysicsContext): void {
   } else {
     targetSpeed = clamp(targetSpeed, MIN_SPEED, MAX_SPEED + 6);
   }
+  if (flight.flare) targetSpeed = Math.min(targetSpeed, MIN_SPEED);
 
   flight.speed = damp(flight.speed, targetSpeed, 4.2, dt);
 
@@ -135,6 +136,8 @@ export function stepPhysics(ctx: PhysicsContext): void {
   flight.glideRatio = currentGlide;
 
   let sink = -flight.speed / currentGlide;
+  // Banked turn: load factor 1/cos(phi) increases still-air sink.
+  sink /= Math.max(Math.cos(Math.abs(flight.bank)), 0.42);
 
   // Diving actively increases downward sink rate (diving down to ground)
   if (flight.pitch > 0.05) {
@@ -143,6 +146,7 @@ export function stepPhysics(ctx: PhysicsContext): void {
 
   // Dynamic Flare cushion & Ground Effect (near landing zone / ground)
   if (flight.flare) {
+    sink *= 0.38;
     const groundEffectMult = flight.agl < 6.0 ? 1.0 + (6.0 - flight.agl) * 0.35 : 1.0;
     const flareLift = 2.5 * symBrake * groundEffectMult;
     sink += flareLift;
