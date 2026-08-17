@@ -150,12 +150,12 @@ export function createGlider(): GliderVisual {
     metalness: 0.06,
     fog: true,
   });
-  const webGeo = new THREE.CylinderGeometry(0.014, 0.02, 1, 6);
+  const webGeo = new THREE.CylinderGeometry(0.0045, 0.006, 1, 5);
   for (const side of ['Left', 'Right'] as const) {
     for (const band of BANDS) {
       const mesh = new THREE.Mesh(webGeo, webMat);
       mesh.name = `${side}RiserWeb_${band}`;
-      mesh.castShadow = true;
+      mesh.castShadow = false;
       root.add(mesh);
       webbing.push(mesh);
     }
@@ -464,11 +464,11 @@ function createPilot(): PilotRig {
   hipBelt.position.set(0, 0.05, 0.04);
 
   const leftCarabiner = new THREE.Mesh(
-    new THREE.TorusGeometry(0.028, 0.006, 6, 10),
+    new THREE.TorusGeometry(0.022, 0.0045, 6, 10),
     carbon,
   );
   leftCarabiner.name = 'LeftCarabiner';
-  leftCarabiner.position.set(-RISER_HALF, 0.34, 0.05);
+  leftCarabiner.position.set(-RISER_HALF, 0.18, 0.06);
   leftCarabiner.rotation.z = Math.PI / 2;
   const rightCarabiner = leftCarabiner.clone();
   rightCarabiner.name = 'RightCarabiner';
@@ -619,10 +619,10 @@ function createPilot(): PilotRig {
 
   const leftRiser = new THREE.Object3D();
   leftRiser.name = 'LeftRiser';
-  leftRiser.position.set(-RISER_HALF, 0.34, 0.05);
+  leftRiser.position.set(-RISER_HALF, 0.18, 0.06);
   const rightRiser = new THREE.Object3D();
   rightRiser.name = 'RightRiser';
-  rightRiser.position.set(RISER_HALF, 0.34, 0.05);
+  rightRiser.position.set(RISER_HALF, 0.18, 0.06);
 
   const leftBrake = new THREE.Object3D();
   leftBrake.name = 'LeftBrakeAnchor';
@@ -786,17 +786,18 @@ function updateSuspensionLines(visual: GliderVisual, pilot: PilotRig): void {
   visual.root.worldToLocal(_riserR);
   const riserOf = { L: _riserL, R: _riserR };
 
-  const bandZ: Record<Band, number> = { A: -0.11, B: -0.03, C: 0.05, D: 0.13 };
+  const bandZ: Record<Band, number> = { A: -0.035, B: -0.012, C: 0.012, D: 0.035 };
   for (const side of ['L', 'R'] as const) {
     const riser = riserOf[side];
     for (const band of BANDS) {
       const n = counts[side][band];
       const g = _gather[side][band];
       if (n > 0) g.multiplyScalar(1 / n);
-      else g.copy(riser).y += 1.6;
-      g.lerp(riser, 0.3);
+      else g.copy(riser).y += 2.1;
+      // Keep the join high so risers run most of the way up, then the fan tapers.
+      g.lerp(riser, 0.16);
       g.z += bandZ[band];
-      g.x += side === 'L' ? -0.12 : 0.12;
+      g.x += side === 'L' ? -0.03 : 0.03;
     }
   }
 
@@ -883,7 +884,8 @@ function prepMaps(mat: THREE.MeshStandardMaterial): void {
     tex.generateMipmaps = true;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
-    tex.anisotropy = 4;
+    tex.anisotropy = 8;
+    if (tex === mat.map) tex.colorSpace = THREE.SRGBColorSpace;
     tex.needsUpdate = true;
   }
 }
@@ -1003,32 +1005,34 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
         mat.alphaTest = 0;
         mat.alphaHash = false;
         mat.depthWrite = true;
-        mat.roughness = Math.max(mat.roughness ?? 0.6, 0.65);
-        mat.metalness = 0.04;
+        mat.roughness = 0.72;
+        mat.metalness = 0;
         mat.metalnessMap = null;
-        mat.envMapIntensity = 0.2;
+        mat.roughnessMap = null;
+        mat.envMapIntensity = 0.12;
         prepMaps(mat);
         mat.needsUpdate = true;
       }
     });
 
     const harness = visual.root.getObjectByName('Harness');
-    const harnessY = size.y * 0.4;
-    const harnessScale = 1.08;
+    const harnessY = size.y * 0.38;
+    const harnessScale = 1.05;
     if (harness) {
-      harness.position.set(0, harnessY, 0.03);
+      harness.position.set(0, harnessY, 0.04);
       harness.scale.setScalar(harnessScale);
-      visual.leftRiser.position.set(-0.165, 0.4, 0.08);
-      visual.rightRiser.position.set(0.165, 0.4, 0.08);
+      // Chest / shoulder maillons — not the hands.
+      visual.leftRiser.position.set(-0.16, 0.16, 0.07);
+      visual.rightRiser.position.set(0.16, 0.16, 0.07);
       const leftCar = harness.getObjectByName('LeftCarabiner');
       const rightCar = harness.getObjectByName('RightCarabiner');
       if (leftCar) leftCar.position.copy(visual.leftRiser.position);
       if (rightCar) rightCar.position.copy(visual.rightRiser.position);
     }
 
-    const earLocalY = (size.y * 0.72 - harnessY) / harnessScale;
-    visual.leftToggle.position.set(-0.2, earLocalY, 0.1);
-    visual.rightToggle.position.set(0.2, earLocalY, 0.1);
+    const earLocalY = (size.y * 0.7 - harnessY) / harnessScale;
+    visual.leftToggle.position.set(-0.22, earLocalY, 0.12);
+    visual.rightToggle.position.set(0.22, earLocalY, 0.12);
     visual.root.userData.brakeLeft = visual.leftToggle;
     visual.root.userData.brakeRight = visual.rightToggle;
 

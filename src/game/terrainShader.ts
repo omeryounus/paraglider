@@ -199,7 +199,7 @@ vec3 splatWorldNormal(vec4 w, vec3 wn) {
   vec3 nw = projectNormal(uSnowN, vWp, wn, sc * 0.64);
   vec3 base = normalize(ng * w.x + nr * w.y + ns * w.z + nw * w.w);
   vec3 detail = projectNormal(uDetailN, vWp, wn, 0.22);
-  return normalize(mix(base, detail, 0.18));
+  return normalize(mix(base, detail, 0.08));
 }
 
 float splatRough(vec4 w) {
@@ -253,7 +253,7 @@ export function createSplatMaterial(biome: LevelId, extent = 1600): THREE.MeshSt
     depthWrite: true,
     flatShading: false,
     normalMap: maps.detailN,
-    normalScale: new THREE.Vector2(0.85, 0.85),
+    normalScale: new THREE.Vector2(0.38, 0.38),
   });
   mat.onBeforeCompile = (shader) => {
     bindSplatUniforms(shader, biome, extent);
@@ -320,6 +320,36 @@ export function ensureUpNormals(geo: THREE.BufferGeometry, _weld = true): void {
     }
     geo.computeVertexNormals();
   }
+  blurGridNormals(geo);
+}
+
+function blurGridNormals(geo: THREE.BufferGeometry): void {
+  const nrm = geo.getAttribute('normal');
+  if (!nrm) return;
+  const dim = Math.round(Math.sqrt(nrm.count));
+  if (dim * dim !== nrm.count || dim < 8) return;
+  const src = Float32Array.from(nrm.array as Float32Array);
+  for (let z = 0; z < dim; z++) {
+    for (let x = 0; x < dim; x++) {
+      let ax = 0;
+      let ay = 0;
+      let az = 0;
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          const zz = z + dz;
+          if (xx < 0 || zz < 0 || xx >= dim || zz >= dim) continue;
+          const i = (zz * dim + xx) * 3;
+          ax += src[i];
+          ay += src[i + 1];
+          az += src[i + 2];
+        }
+      }
+      const len = Math.hypot(ax, ay, az) || 1;
+      nrm.setXYZ(z * dim + x, ax / len, ay / len, az / len);
+    }
+  }
+  nrm.needsUpdate = true;
 }
 
 export function tessellateOnce(geo: THREE.BufferGeometry): THREE.BufferGeometry {
