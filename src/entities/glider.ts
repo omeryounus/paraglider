@@ -287,194 +287,190 @@ function createRiserStraps(): THREE.Group {
   return group;
 }
 
+function mesh(
+  geo: THREE.BufferGeometry,
+  mat: THREE.Material,
+  parent: THREE.Object3D,
+  pos: [number, number, number],
+  rot: [number, number, number] = [0, 0, 0],
+): THREE.Mesh {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(...pos);
+  m.rotation.set(...rot);
+  m.castShadow = true;
+  parent.add(m);
+  return m;
+}
+
 function createPilot(): PilotRig {
   const group = new THREE.Group();
-  const jacket = skin(0x2a3340, 0.58, 0.1);
-  const pants = skin(0x1a1e24, 0.68, 0.06);
-  const flesh = skin(0xc68642, 0.55);
+  group.name = 'Pilot';
+  const jacket = skin(0x2c3846, 0.56, 0.08);
+  const pants = skin(0x1b2128, 0.66, 0.05);
+  const flesh = skin(0xc58a5a, 0.52);
+  const bootMat = skin(0x141414, 0.4, 0.14);
   const carbon = new THREE.MeshStandardMaterial({
-    color: 0x161b20,
-    roughness: 0.32,
-    metalness: 0.3,
+    color: 0x171c21,
+    roughness: 0.34,
+    metalness: 0.28,
     fog: false,
   });
-  applyFresnelRim(carbon, 0x8eb8e6, 2.35, 0.42);
-  const webbing = skin(0x2a2218, 0.55, 0.04);
+  applyFresnelRim(carbon, 0x8eb8e6, 2.4, 0.38);
+  const webbing = skin(0x2c2418, 0.54, 0.04);
   const buckle = new THREE.MeshStandardMaterial({
     color: 0xb7bec4,
-    roughness: 0.28,
-    metalness: 0.82,
+    roughness: 0.26,
+    metalness: 0.84,
     fog: false,
   });
-
-  const cocoon = new THREE.Group();
-  cocoon.name = 'PodCocoon';
-  const hullGeo = new THREE.SphereGeometry(0.36, 22, 16);
-  hullGeo.scale(0.7, 0.5, 1.88);
-  const hull = new THREE.Mesh(hullGeo, carbon);
-  hull.position.set(0, 0.1, 0.4);
-  hull.rotation.x = 0.1;
-  hull.castShadow = true;
-  const wrapGeo = new THREE.SphereGeometry(0.3, 20, 14);
-  wrapGeo.scale(0.78, 0.7, 1.05);
-  const wrap = new THREE.Mesh(wrapGeo, carbon);
-  wrap.position.set(0, 0.22, 0.16);
-  wrap.rotation.x = 0.22;
-  wrap.castShadow = true;
-  const backGeo = new THREE.SphereGeometry(0.2, 16, 12);
-  backGeo.scale(0.72, 0.9, 0.58);
-  const back = new THREE.Mesh(backGeo, carbon);
-  back.position.set(0, 0.3, 0.2);
-  back.castShadow = true;
-  const keel = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.045, 1.22), carbon);
-  keel.position.set(0, -0.02, 0.46);
-  keel.castShadow = true;
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.42, 14), carbon);
-  nose.rotation.x = Math.PI / 2;
-  nose.position.set(0, 0.06, 1.05);
-  nose.castShadow = true;
-  cocoon.add(hull, wrap, back, keel, nose);
+  const helmetMat = new THREE.MeshStandardMaterial({
+    color: 0x1a222a,
+    roughness: 0.24,
+    metalness: 0.4,
+    fog: false,
+  });
+  applyFresnelRim(helmetMat, 0xa8d2ff, 2.1, 0.64);
 
   const torso = new THREE.Group();
-  torso.position.set(0, 0.22, 0.06);
-  const chest = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.24, 6, 10), jacket);
-  chest.position.set(0, 0.18, 0.02);
-  chest.rotation.x = 0.38;
-  chest.castShadow = true;
-  torso.add(chest);
+  torso.name = 'Torso';
+  torso.position.set(0, 0.2, 0.04);
+  torso.rotation.x = 0.32;
+  group.add(torso);
 
-  const strap = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.028, 0.045), webbing);
-  strap.position.set(0, 0.2, 0.12);
-  strap.rotation.x = 0.2;
-  strap.castShadow = true;
-  const clasp = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.032, 0.05), buckle);
-  clasp.position.set(0, 0.2, 0.145);
-  torso.add(strap, clasp);
+  const pelvis = mesh(new THREE.SphereGeometry(0.11, 14, 10), pants, torso, [0, 0.02, 0.02]);
+  pelvis.scale.set(1.15, 0.72, 0.95);
+  mesh(new THREE.CapsuleGeometry(0.105, 0.1, 6, 10), jacket, torso, [0, 0.14, 0.01]);
+  const chest = mesh(new THREE.CapsuleGeometry(0.125, 0.16, 6, 12), jacket, torso, [0, 0.3, 0.0]);
+  chest.scale.set(1.18, 1, 0.82);
+  mesh(new THREE.SphereGeometry(0.07, 10, 8), jacket, torso, [0, 0.4, 0.01]).scale.set(1.35, 0.55, 0.9);
 
   const head = new THREE.Group();
-  head.position.set(0, 0.44, 0.1);
+  head.position.set(0, 0.5, 0.05);
+  torso.add(head);
+  mesh(new THREE.CapsuleGeometry(0.032, 0.045, 5, 8), flesh, head, [0, -0.04, 0.01]);
   const headShell = new THREE.Group();
-  const helmetMat = new THREE.MeshStandardMaterial({
-    color: 0x1c242c,
-    roughness: 0.26,
-    metalness: 0.38,
-    fog: false,
-  });
-  applyFresnelRim(helmetMat, 0xa8d2ff, 2.15, 0.62);
-  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.125, 18, 14), helmetMat);
-  helmet.scale.set(1.02, 1.08, 1.14);
-  helmet.castShadow = true;
-  const visor = new THREE.Mesh(
-    new THREE.SphereGeometry(0.11, 16, 12, 0, Math.PI * 2, 0.48, 1.12),
+  headShell.name = 'HeadShell';
+  head.add(headShell);
+  const skull = mesh(new THREE.SphereGeometry(0.09, 16, 12), flesh, headShell, [0, 0.05, 0.0]);
+  skull.scale.set(0.92, 1.02, 0.95);
+  const helmet = mesh(new THREE.SphereGeometry(0.108, 18, 14), helmetMat, headShell, [0, 0.055, -0.006]);
+  helmet.scale.set(1.04, 1.08, 1.16);
+  mesh(
+    new THREE.SphereGeometry(0.096, 16, 12, 0, Math.PI * 2, 0.55, 1.05),
     new THREE.MeshStandardMaterial({
-      color: 0x08141c,
-      roughness: 0.1,
-      metalness: 0.9,
-      envMapIntensity: 1.4,
+      color: 0x071018,
+      roughness: 0.08,
+      metalness: 0.92,
+      envMapIntensity: 1.5,
       fog: false,
     }),
+    headShell,
+    [0, 0.04, 0.034],
   );
-  visor.position.set(0, 0.0, 0.028);
-  visor.castShadow = true;
-  headShell.add(helmet, visor);
+  mesh(new THREE.SphereGeometry(0.016, 8, 6), flesh, headShell, [-0.028, 0.048, 0.072]);
+  mesh(new THREE.SphereGeometry(0.016, 8, 6), flesh, headShell, [0.028, 0.048, 0.072]);
+  mesh(new THREE.SphereGeometry(0.022, 8, 6), flesh, headShell, [0, 0.01, 0.078]);
   const eye = new THREE.Object3D();
-  eye.position.set(0, 0.02, 0.13);
-  head.add(headShell, eye);
-  torso.add(head);
+  eye.name = 'Eye';
+  eye.position.set(0, 0.05, 0.12);
+  headShell.add(eye);
 
   const makeArm = (side: number): { root: THREE.Group; forearm: THREE.Group; hand: THREE.Object3D } => {
     const root = new THREE.Group();
-    root.position.set(side * 0.155, 0.3, 0.05);
-    root.rotation.z = side * 0.78;
-    root.rotation.x = 0.18;
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.052, 10, 8), jacket);
-    cap.position.set(0, 0.01, 0);
-    cap.castShadow = true;
-    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.046, 0.15, 5, 8), jacket);
-    upper.position.y = -0.1;
-    upper.castShadow = true;
-    const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.046, 10, 8), jacket);
-    elbow.position.y = -0.2;
-    elbow.castShadow = true;
+    root.position.set(side * 0.168, 0.36, 0.02);
+    root.rotation.z = side * 0.72;
+    root.rotation.x = 0.12;
+    mesh(new THREE.SphereGeometry(0.048, 12, 10), jacket, root, [0, 0.0, 0]);
+    mesh(new THREE.CapsuleGeometry(0.04, 0.16, 5, 10), jacket, root, [0, -0.11, 0]);
+    mesh(new THREE.SphereGeometry(0.038, 10, 8), jacket, root, [0, -0.21, 0]);
     const forearm = new THREE.Group();
-    forearm.position.set(0, -0.2, 0);
-    forearm.rotation.x = -1.82;
-    const lower = new THREE.Mesh(new THREE.CapsuleGeometry(0.038, 0.13, 5, 8), jacket);
-    lower.position.y = -0.1;
-    lower.castShadow = true;
-    const cuff = new THREE.Mesh(new THREE.SphereGeometry(0.036, 8, 6), jacket);
-    cuff.position.y = -0.19;
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.034, 8, 6), flesh);
-    hand.position.y = -0.23;
-    hand.castShadow = true;
-    const toggle = new THREE.Mesh(
-      new THREE.TorusGeometry(0.028, 0.007, 6, 12),
+    forearm.position.set(0, -0.21, 0);
+    forearm.rotation.x = -1.78;
+    root.add(forearm);
+    mesh(new THREE.CapsuleGeometry(0.034, 0.14, 5, 10), jacket, forearm, [0, -0.1, 0]);
+    mesh(new THREE.SphereGeometry(0.03, 8, 6), jacket, forearm, [0, -0.19, 0]);
+    const hand = new THREE.Group();
+    hand.position.set(0, -0.23, 0);
+    forearm.add(hand);
+    mesh(new THREE.BoxGeometry(0.042, 0.055, 0.022), flesh, hand, [0, -0.02, 0.004]);
+    for (let f = 0; f < 4; f++) {
+      const x = (f - 1.5) * 0.01;
+      mesh(new THREE.CapsuleGeometry(0.0055, 0.028, 3, 5), flesh, hand, [x, -0.055, 0.004], [0.35, 0, 0]);
+    }
+    mesh(new THREE.CapsuleGeometry(0.006, 0.02, 3, 5), flesh, hand, [side * -0.018, -0.03, 0.01], [0.4, 0, side * 0.7]);
+    const toggle = mesh(
+      new THREE.TorusGeometry(0.026, 0.006, 6, 12),
       new THREE.MeshStandardMaterial({ color: 0xd82418, roughness: 0.35, fog: false }),
+      hand,
+      [0, -0.04, 0.018],
+      [Math.PI / 2, 0, 0],
     );
-    toggle.rotation.x = Math.PI / 2;
-    toggle.position.y = -0.01;
-    hand.add(toggle);
-    forearm.add(lower, cuff, hand);
-    root.add(cap, upper, elbow, forearm);
+    toggle.castShadow = true;
     return { root, forearm, hand };
   };
   const left = makeArm(-1);
   const right = makeArm(1);
   torso.add(left.root, right.root);
 
-  const shoulderL = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.07, 4, 8), jacket);
-  shoulderL.position.set(-0.14, 0.3, 0.04);
-  shoulderL.rotation.z = 0.9;
-  const shoulderR = shoulderL.clone();
-  shoulderR.position.x = 0.14;
-  shoulderR.rotation.z = -0.9;
-  torso.add(shoulderL, shoulderR);
+  const makeLeg = (side: number): void => {
+    const hip = new THREE.Group();
+    hip.position.set(side * 0.065, 0.0, 0.06);
+    hip.rotation.x = 1.18;
+    group.add(hip);
+    mesh(new THREE.SphereGeometry(0.055, 12, 10), pants, hip, [0, 0, 0]);
+    mesh(new THREE.CapsuleGeometry(0.05, 0.2, 5, 10), pants, hip, [0, -0.14, 0]);
+    const knee = new THREE.Group();
+    knee.position.set(0, -0.26, 0);
+    knee.rotation.x = 0.22;
+    hip.add(knee);
+    mesh(new THREE.SphereGeometry(0.042, 10, 8), pants, knee, [0, 0, 0]);
+    mesh(new THREE.CapsuleGeometry(0.038, 0.18, 5, 10), pants, knee, [0, -0.12, 0]);
+    const ankle = new THREE.Group();
+    ankle.position.set(0, -0.24, 0);
+    ankle.rotation.x = -0.35;
+    knee.add(ankle);
+    mesh(new THREE.SphereGeometry(0.028, 8, 6), bootMat, ankle, [0, 0, 0]);
+    mesh(new THREE.BoxGeometry(0.07, 0.05, 0.16), bootMat, ankle, [0, -0.012, 0.055]);
+    mesh(new THREE.BoxGeometry(0.062, 0.028, 0.05), bootMat, ankle, [0, -0.008, 0.12]);
+  };
+  makeLeg(-1);
+  makeLeg(1);
 
-  const thighL = new THREE.Mesh(new THREE.CapsuleGeometry(0.052, 0.2, 5, 8), pants);
-  thighL.rotation.x = 1.32;
-  thighL.position.set(-0.055, 0.02, 0.42);
-  thighL.castShadow = true;
-  const thighR = thighL.clone();
-  thighR.position.x = 0.055;
-  const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.18), skin(0x111111, 0.42, 0.12));
-  bootL.position.set(-0.06, 0.0, 0.96);
-  bootL.castShadow = true;
-  const bootR = bootL.clone();
-  bootR.position.x = 0.06;
-
-  const legStrap = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.035), webbing);
-  legStrap.position.set(0, 0.08, 0.55);
-  const hipBuckle = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.024, 0.04), buckle);
-  hipBuckle.position.set(0, 0.09, 0.57);
+  const seat = mesh(new THREE.BoxGeometry(0.26, 0.035, 0.22), carbon, group, [0, 0.07, 0.18]);
+  seat.rotation.x = 0.18;
+  const backPad = mesh(new THREE.BoxGeometry(0.22, 0.28, 0.05), carbon, torso, [0, 0.22, -0.1]);
+  backPad.rotation.x = -0.08;
+  mesh(new THREE.BoxGeometry(0.26, 0.028, 0.04), webbing, torso, [0, 0.26, 0.1], [0.15, 0, 0]);
+  mesh(new THREE.BoxGeometry(0.038, 0.03, 0.046), buckle, torso, [0, 0.26, 0.124]);
+  mesh(new THREE.BoxGeometry(0.03, 0.16, 0.016), webbing, torso, [-0.11, 0.16, 0.02], [0.1, 0, 0.32]);
+  mesh(new THREE.BoxGeometry(0.03, 0.16, 0.016), webbing, torso, [0.11, 0.16, 0.02], [0.1, 0, -0.32]);
+  mesh(new THREE.TorusGeometry(0.055, 0.01, 6, 12), webbing, group, [-0.07, 0.1, 0.42], [1.2, 0, 0]);
+  mesh(new THREE.TorusGeometry(0.055, 0.01, 6, 12), webbing, group, [0.07, 0.1, 0.42], [1.2, 0, 0]);
 
   const leftRiser = new THREE.Group();
-  leftRiser.position.set(-0.125, 0.2, 0.05);
+  leftRiser.name = 'LeftRiser';
+  leftRiser.position.set(-0.13, 0.24, 0.06);
   const rightRiser = new THREE.Group();
-  rightRiser.position.set(0.125, 0.2, 0.05);
-  const carabiner = (parent: THREE.Object3D): void => {
-    const ring = new THREE.Mesh(
+  rightRiser.name = 'RightRiser';
+  rightRiser.position.set(0.13, 0.24, 0.06);
+  const hang = (parent: THREE.Object3D): void => {
+    mesh(
       new THREE.TorusGeometry(0.026, 0.007, 8, 14),
       new THREE.MeshStandardMaterial({ color: 0xc5ccd2, metalness: 0.88, roughness: 0.2, fog: false }),
+      parent,
+      [0, 0, 0],
+      [Math.PI / 2, 0, 0],
     );
-    ring.rotation.x = Math.PI / 2;
-    ring.castShadow = true;
-    const gate = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.006, 0.022), buckle);
-    gate.position.set(0, 0.0, 0.024);
-    parent.add(ring, gate);
+    mesh(new THREE.BoxGeometry(0.01, 0.006, 0.022), buckle, parent, [0, 0, 0.024]);
   };
-  carabiner(leftRiser);
-  carabiner(rightRiser);
-  const shoulderWebL = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.14, 0.016), webbing);
-  shoulderWebL.position.set(-0.11, 0.12, 0.03);
-  shoulderWebL.rotation.z = 0.28;
-  const shoulderWebR = shoulderWebL.clone();
-  shoulderWebR.position.x = 0.11;
-  shoulderWebR.rotation.z = -0.28;
-  torso.add(leftRiser, rightRiser, shoulderWebL, shoulderWebR);
+  hang(leftRiser);
+  hang(rightRiser);
+  torso.add(leftRiser, rightRiser);
 
-  const rimFill = new THREE.PointLight(0xb8d6ff, 0.55, 2.6, 1.4);
-  rimFill.position.set(0, 0.48, 0.42);
-  group.add(cocoon, torso, thighL, thighR, bootL, bootR, legStrap, hipBuckle, rimFill);
+  const rimFill = new THREE.PointLight(0xb8d6ff, 0.45, 2.4, 1.4);
+  rimFill.position.set(0, 0.55, 0.38);
+  group.add(rimFill);
+
   return {
     group,
     torso,
@@ -488,9 +484,9 @@ function createPilot(): PilotRig {
     rightHand: right.hand,
     leftRiser,
     rightRiser,
-    restTorsoX: 0,
-    restArmX: 0.18,
-    restForearmX: -1.82,
+    restTorsoX: 0.32,
+    restArmX: 0.12,
+    restForearmX: -1.78,
   };
 }
 
