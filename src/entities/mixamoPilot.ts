@@ -31,6 +31,12 @@ const POSE_BONES = [
   'RightForeArm',
   'LeftHand',
   'RightHand',
+  'LeftHandIndex1',
+  'LeftHandIndex2',
+  'LeftHandIndex3',
+  'RightHandIndex1',
+  'RightHandIndex2',
+  'RightHandIndex3',
   'LeftUpLeg',
   'RightUpLeg',
   'LeftLeg',
@@ -280,6 +286,13 @@ function poseSeatedPilot(
   fromBind(bones.RightForeArm, bind.RightForeArm, 0.4 + rightPull * 1.25, 1.22, -0.2);
   fromBind(bones.LeftHand, bind.LeftHand, 0.4 + leftPull * 0.25, 0.1, 0.4);
   fromBind(bones.RightHand, bind.RightHand, 0.4 + rightPull * 0.25, -0.1, -0.4);
+  // Auto-rig maps every finger onto the index chain — curl it into a fist on the toggles.
+  fromBind(bones.LeftHandIndex1, bind.LeftHandIndex1, 1.22, 0.08, 0.12);
+  fromBind(bones.LeftHandIndex2, bind.LeftHandIndex2, 1.45, 0, 0);
+  fromBind(bones.LeftHandIndex3, bind.LeftHandIndex3, 1.18, 0, 0);
+  fromBind(bones.RightHandIndex1, bind.RightHandIndex1, 1.22, -0.08, -0.12);
+  fromBind(bones.RightHandIndex2, bind.RightHandIndex2, 1.45, 0, 0);
+  fromBind(bones.RightHandIndex3, bind.RightHandIndex3, 1.18, 0, 0);
 
   mixamo.root.rotation.z = damp(mixamo.root.rotation.z, weightShift * 0.16, 7, dt);
   mixamo.root.rotation.x = damp(mixamo.root.rotation.x, 0.06 + flare * 0.07, 6, dt);
