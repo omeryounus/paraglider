@@ -145,7 +145,7 @@ export async function loadMixamoPilot(): Promise<MixamoPilot | null> {
     const box = new THREE.Box3().setFromObject(root);
     const size = box.getSize(new THREE.Vector3());
     const span = size.y || 1.7;
-    root.scale.multiplyScalar((1.7 * 1.08) / span);
+    root.scale.multiplyScalar((1.7 * 1.22) / span);
     root.updateMatrixWorld(true);
     const fit = new THREE.Box3().setFromObject(root);
     const center = fit.getCenter(new THREE.Vector3());

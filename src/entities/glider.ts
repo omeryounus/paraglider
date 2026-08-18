@@ -1239,7 +1239,7 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
 
   if (mixamo) {
     const rig = visual.root.userData.pilot as PilotRig;
-    mixamo.root.position.y -= 0.08;
+    mixamo.root.position.y -= 0.14;
     rig.group.add(mixamo.root);
     visual.root.userData.mixamoPilot = mixamo;
     const hands = mixamoHandAnchors(mixamo);
