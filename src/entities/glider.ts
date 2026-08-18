@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { loadMixamoPilot, poseMixamoPilot, type MixamoPilot } from './mixamoPilot';
 import {
   CANOPY_Y,
   CHORD,
@@ -756,6 +757,10 @@ export function poseGlider(
   visual.leftToggle.position.y = restLY - leftPull * 0.38;
   visual.rightToggle.position.y = restRY - rightPull * 0.38;
 
+  const mixamo = visual.root.userData.mixamoPilot as MixamoPilot | undefined;
+  if (mixamo) {
+    poseMixamoPilot(mixamo, flight, steer, dt);
+  }
   const person = visual.root.userData.hyper3dPerson as THREE.Object3D | undefined;
   if (person) {
     person.rotation.z = damp(person.rotation.z, weightShift * 0.22, 7, dt);
@@ -1021,6 +1026,44 @@ async function loadGlbScene(url: string, _doubleSide = false): Promise<THREE.Gro
   }
 }
 
+function hideProceduralBody(visual: GliderVisual): void {
+  const hide = new Set(['Chest', 'Head', 'Neck', 'Helmet', 'HeadShell']);
+  visual.root.getObjectByName('Pilot')?.traverse((child) => {
+    if (child.name === 'Harness' || child.name.endsWith('Riser') || child.name.endsWith('Toggle')) {
+      return;
+    }
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if (
+      mesh.name === 'SeatBase' ||
+      mesh.name === 'HarnessPack' ||
+      mesh.name === 'HipBelt' ||
+      mesh.name === 'ChestStrap'
+    ) {
+      mesh.visible = false;
+      return;
+    }
+    const underHarness =
+      mesh.parent?.name === 'Harness' ||
+      mesh.name.startsWith('Harness') ||
+      mesh.name.includes('Carabiner');
+    if (underHarness) return;
+    if (
+      hide.has(mesh.name) ||
+      mesh.name.includes('Arm') ||
+      mesh.name.includes('Hand') ||
+      mesh.name.includes('Leg') ||
+      mesh.name.includes('Foot') ||
+      mesh.name.includes('Thigh') ||
+      mesh.name.includes('Shin') ||
+      mesh.name.includes('Forearm') ||
+      mesh.name === 'Visor'
+    ) {
+      mesh.visible = false;
+    }
+  });
+}
+
 function fitAsset(src: THREE.Object3D, targetSpan: number, axis: 'x' | 'y'): THREE.Box3 {
   const box = new THREE.Box3().setFromObject(src);
   const size = box.getSize(new THREE.Vector3());
@@ -1034,9 +1077,11 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
   const parachute =
     (await loadGlbScene('./models/parachute.glb', true)) ??
     (await loadGlbScene('./models/canopy.glb', true));
-  const person =
-    (await loadGlbScene('./models/person.glb', false)) ??
-    (await loadGlbScene('./models/pilot.glb', false));
+  const mixamo = await loadMixamoPilot();
+  const person = mixamo
+    ? null
+    : ((await loadGlbScene('./models/person.glb', false)) ??
+      (await loadGlbScene('./models/pilot.glb', false)));
 
   if (parachute) {
     parachute.name = 'Hyper3D_Parachute';
@@ -1085,6 +1130,46 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
       visual.root.userData.studioSize = box.getSize(new THREE.Vector3());
       visual.root.userData.studioMinZ = box.min.z;
     }
+  }
+
+  if (mixamo) {
+    const rig = visual.root.userData.pilot as PilotRig;
+    mixamo.root.position.y -= 0.08;
+    rig.group.add(mixamo.root);
+    visual.root.userData.mixamoPilot = mixamo;
+    hideProceduralBody(visual);
+    poseMixamoPilot(
+      mixamo,
+      {
+        heading: 0,
+        pitch: 0,
+        bank: 0,
+        speed: 12,
+        verticalSpeed: 0,
+        boost: 1,
+        boosting: false,
+        flare: false,
+        speedBoost: 0,
+        agl: 10,
+        asl: 10,
+        nearMiss: false,
+        inThermal: false,
+        inDowndraft: false,
+        windX: 0,
+        windZ: 0,
+        leftBrake: 0,
+        rightBrake: 0,
+        speedBar: 0,
+        weightShift: 0,
+        bigEars: false,
+        stall: false,
+        harnessRoll: 0,
+        harnessPitch: 0,
+        glideRatio: 11,
+      },
+      0,
+      1 / 60,
+    );
   }
 
   if (person) {
@@ -1149,31 +1234,7 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
       }
     }
 
-    const hide = new Set(['Chest', 'Head', 'Neck', 'Helmet', 'HeadShell']);
-    visual.root.getObjectByName('Pilot')?.traverse((child) => {
-      if (child.name === 'Harness' || child.name.endsWith('Riser') || child.name.endsWith('Toggle')) {
-        return;
-      }
-      const mesh = child as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      if (
-        mesh.name === 'SeatBase' ||
-        mesh.name === 'HarnessPack' ||
-        mesh.name === 'HipBelt' ||
-        mesh.name === 'ChestStrap'
-      ) {
-        mesh.visible = false;
-        return;
-      }
-      const underHarness = mesh.parent?.name === 'Harness' || mesh.name.startsWith('Harness')
-        || mesh.name.includes('Carabiner');
-      if (underHarness) return;
-      if (hide.has(mesh.name) || mesh.name.includes('Arm') || mesh.name.includes('Hand')
-        || mesh.name.includes('Leg') || mesh.name.includes('Foot') || mesh.name.includes('Thigh')
-        || mesh.name.includes('Shin') || mesh.name.includes('Forearm') || mesh.name === 'Visor') {
-        mesh.visible = false;
-      }
-    });
+    hideProceduralBody(visual);
 
     const pilot = visual.root.userData.pilot as PilotRig;
     person.position.y -= 0.08;
