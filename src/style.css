@@ -316,6 +316,18 @@ kbd {
 #hud-chip.danger { color: var(--hot); background: rgba(255, 71, 58, 0.16); }
 #hud-time.low { color: var(--hot); }
 
+#visor {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 42%, transparent 42%, rgba(4, 10, 16, 0.55) 78%, rgba(2, 6, 10, 0.88) 100%),
+    linear-gradient(180deg, rgba(8, 16, 24, 0.35) 0%, transparent 18%, transparent 72%, rgba(6, 10, 14, 0.5) 100%);
+  box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.45);
+}
+#visor[hidden] { display: none !important; }
+
 #countdown[hidden],
 #level-select[hidden],
 #hud[hidden],

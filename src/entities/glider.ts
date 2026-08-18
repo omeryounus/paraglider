@@ -6,7 +6,9 @@ import {
   placeMixamoGear,
   playMixamoDying,
   poseMixamoPilot,
+  setMixamoGait,
   type MixamoPilot,
+  type PilotGait,
 } from './mixamoPilot';
 import {
   CANOPY_Y,
@@ -726,12 +728,18 @@ export function poseGlider(
 ): void {
   const pilot = visual.root.userData.pilot as PilotRig;
 
+  const launched = (visual.root.userData.canopyDeploy as number | undefined) ?? 1;
   // 1. Overall Flight Orientation (Pitch + Heading)
-  visual.root.rotation.set(flight.pitch * 0.42, flight.heading, 0);
+  visual.root.rotation.set(flight.pitch * 0.42 * launched, flight.heading, 0);
+  visual.canopy.visible = launched > 0.04;
+  visual.canopy.scale.setScalar(Math.max(0.02, launched));
+  visual.lines.visible = launched > 0.35;
+  visual.brakeLines.visible = launched > 0.35;
 
   // 2. Canopy Roll & Pitch (Canopy leads the bank)
-  visual.canopy.rotation.z = damp(visual.canopy.rotation.z, -flight.bank * 0.45, 7.5, dt);
-  visual.canopy.rotation.x = damp(visual.canopy.rotation.x, flight.pitch * 0.18, 6.5, dt);
+  const stallWobble = flight.stall ? Math.sin(time * 9) * 0.18 : 0;
+  visual.canopy.rotation.z = damp(visual.canopy.rotation.z, -flight.bank * 0.45 + stallWobble, 7.5, dt);
+  visual.canopy.rotation.x = damp(visual.canopy.rotation.x, flight.pitch * 0.18 + (flight.stall ? 0.22 : 0), 6.5, dt);
 
   // 3. Pilot Harness Pendulum Dynamics (Harness swings beneath canopy)
   pilot.group.rotation.z = damp(pilot.group.rotation.z, flight.harnessRoll, 8.5, dt);
@@ -1114,6 +1122,23 @@ function hideProceduralBody(visual: GliderVisual): void {
 export function playPilotDying(visual: GliderVisual): void {
   const mixamo = visual.root.userData.mixamoPilot as MixamoPilot | undefined;
   if (mixamo) playMixamoDying(mixamo);
+}
+
+export function setCanopyDeploy(visual: GliderVisual, amount: number): void {
+  visual.root.userData.canopyDeploy = THREE.MathUtils.clamp(amount, 0, 1);
+}
+
+export function setPilotGait(visual: GliderVisual, gait: PilotGait): void {
+  const mixamo = visual.root.userData.mixamoPilot as MixamoPilot | undefined;
+  if (mixamo) setMixamoGait(mixamo, gait);
+}
+
+export function mixamoHeadWorld(visual: GliderVisual, target: THREE.Vector3): boolean {
+  const mixamo = visual.root.userData.mixamoPilot as MixamoPilot | undefined;
+  const head = mixamo?.bones.Head;
+  if (!head) return false;
+  head.getWorldPosition(target);
+  return true;
 }
 
 function isHelperMesh(mesh: THREE.Mesh): boolean {

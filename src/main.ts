@@ -15,6 +15,9 @@ import {
   updateCourse,
   type Course,
 } from './game/course';
+import { applyDailyLine, utcDayKey } from './game/daily';
+import { loadGhost, recordGhost, saveGhost } from './game/ghost';
+import { createLaunch, launchPoint, stepLaunch, type LaunchState } from './game/launch';
 import { createInput } from './game/input';
 import { assistToward, createFlight, grantBoost, stepPhysics, triggerSpeedRing } from './game/physics';
 import { createComposer, resizeComposer } from './game/postfx';
@@ -38,12 +41,14 @@ import {
   loadingStop,
   reportCompletion,
   setGameContext,
+  submitScore,
 } from './game/crazygames';
 import { isUnlocked, loadProgress, newSession, nextUnlocked, recordResult, type Session } from './game/state';
 import { loadTerrain, purgeTerrainFromScene, type TerrainWorld } from './game/terrain';
 import { updateWater } from './game/water';
-import type { FlightState, LevelDef, LevelId, Progress, ScoreState } from './game/types';
-import { attachStudioAssets, createGlider, playPilotDying, poseGlider } from './entities/glider';
+import type { FlightState, GhostSample, LevelDef, LevelId, Progress, ScoreState } from './game/types';
+import { attachStudioAssets, createGlider, playPilotDying, poseGlider, setCanopyDeploy, setPilotGait } from './entities/glider';
+import { createGhostVisual, stepGhost, type GhostVisual } from './entities/ghostGlider';
 import { createThermalDust, spawnPopup, updatePopups, updateThermalDust, type Popup } from './entities/effects';
 import { paintWaypointHud } from './entities/waypointArrow';
 import { bindHud, fillBiomeSelect, paintHud, setHudVisible, setTerrainSource } from './ui/hud';
@@ -98,10 +103,10 @@ const coachEl = document.querySelector<HTMLElement>('#coach')!;
 const volSlider = document.querySelector<HTMLInputElement>('#vol-slider');
 
 const ALPINE_COACH: Array<{ until: number; text: string }> = [
-  { until: 5, text: 'A / D or ← / → banks the wing. Fly through the wide green gates.' },
-  { until: 10, text: 'S, ↑ or Space flares and slows you. W dives for speed.' },
-  { until: 15, text: 'Blue columns are lift — drift through them to climb.' },
-  { until: 20, text: 'Thread the remaining gates, then flare onto the bullseye.' },
+  { until: 6, text: 'W runs the ridge. The wing inflates when you step off.' },
+  { until: 12, text: 'A / D banks. Fly the wide green gates.' },
+  { until: 18, text: 'Blue column = lift. S / Space flares for the pad.' },
+  { until: 24, text: 'Hold both brakes too long and the wing folds. Ease off to recover.' },
 ];
 
 let progress: Progress = loadProgress();
@@ -115,6 +120,11 @@ let atmo: Atmosphere | null = null;
 let paused = false;
 let coachElapsed = 0;
 let inThermalLast = false;
+let launch: LaunchState | null = null;
+let ghost: GhostVisual | null = null;
+let ghostSamples: GhostSample[] = [];
+let flyClock = 0;
+const visorEl = document.querySelector<HTMLElement>('#visor');
 
 const sampleGround = (origin: THREE.Vector3): number | null => {
   if (!terrain) return null;
@@ -144,20 +154,20 @@ const sampleClearance = (origin: THREE.Vector3, heading: number): number => {
 };
 
 function setPaused(value: boolean): void {
-  if (value && session.phase !== 'countdown' && session.phase !== 'flying') return;
+  if (value && session.phase !== 'countdown' && session.phase !== 'flying' && session.phase !== 'launch') return;
   paused = value;
   pauseEl.hidden = !value;
   renderer.domElement.style.pointerEvents = value ? 'none' : '';
   if (value) {
     audio.update(0, 0, false);
     gameplayStop();
-  } else if (session.phase === 'countdown' || session.phase === 'flying') {
+  } else if (session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'launch') {
     gameplayStart();
   }
 }
 
 function togglePause(): void {
-  if (session.phase !== 'countdown' && session.phase !== 'flying') return;
+  if (session.phase !== 'countdown' && session.phase !== 'flying' && session.phase !== 'launch') return;
   setPaused(!paused);
 }
 
@@ -166,7 +176,7 @@ function hideCoach(): void {
 }
 
 function paintCoach(dt: number): void {
-  const live = session.phase === 'countdown' || session.phase === 'flying';
+  const live = session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'launch';
   if (level.id !== 'alpine' || !live || paused) {
     if (!live) hideCoach();
     return;
@@ -191,6 +201,10 @@ function clearWorld(): void {
   atmo = null;
   popups.splice(0).forEach((p) => p.el.remove());
   if (wayMark) wayMark.hidden = true;
+  if (ghost) {
+    ghost.root.removeFromParent();
+    ghost = null;
+  }
 }
 
 async function startLevel(id: LevelId): Promise<void> {
@@ -215,7 +229,7 @@ async function startLevel(id: LevelId): Promise<void> {
   setLoader(menus, `Building ${getLevel(id).name}…`, false);
   clearWorld();
 
-  level = getLevel(id);
+  level = applyDailyLine(getLevel(id));
   atmo = createAtmosphere(level, scene);
   renderer.setClearColor(level.fogColor, 1);
   renderer.toneMappingExposure = 1.0;
@@ -223,23 +237,46 @@ async function startLevel(id: LevelId): Promise<void> {
   course = buildCourse(level, terrain, scene);
   flight = createFlight();
   score = emptyScore();
-  session = newSession(level.parTime);
-  const spawn = spawnPoint(level, terrain);
-  glider.root.position.copy(spawn);
-  flight.asl = spawn.y;
-  flight.heading = spawnHeading(terrain);
-  camera.position.set(
-    spawn.x - Math.sin(flight.heading) * 11.5,
-    spawn.y + 2.2,
-    spawn.z - Math.cos(flight.heading) * 11.5,
-  );
+  ghostSamples = [];
+  flyClock = 0;
+  launch = null;
+  const tape = loadGhost(id);
+  if (tape && tape.samples.length > 4) {
+    ghost = createGhostVisual(tape);
+    scene.add(ghost.root);
+  }
+  const heading = spawnHeading(terrain);
+  flight.heading = heading;
+  if (level.launch) {
+    const spawn = launchPoint(level, terrain);
+    glider.root.position.copy(spawn);
+    flight.asl = spawn.y;
+    flight.agl = 1.05;
+    launch = createLaunch(terrain);
+    session = { phase: 'launch', result: null, timeLeft: level.parTime, countdown: 0 };
+    setCanopyDeploy(glider, 0);
+    setPilotGait(glider, 'walk');
+    camera.position.set(spawn.x - Math.sin(heading) * 7.5, spawn.y + 2.4, spawn.z - Math.cos(heading) * 7.5);
+  } else {
+    const spawn = spawnPoint(level, terrain);
+    glider.root.position.copy(spawn);
+    flight.asl = spawn.y;
+    session = newSession(level.parTime);
+    setCanopyDeploy(glider, 1);
+    setPilotGait(glider, 'sit');
+    camera.position.set(
+      spawn.x - Math.sin(heading) * 11.5,
+      spawn.y + 2.2,
+      spawn.z - Math.cos(heading) * 11.5,
+    );
+  }
   resetLook();
-  snapCamera(spawn, flight.heading);
+  snapCamera(glider.root.position, flight.heading);
   fillBiomeSelect(hud, level.id, progress, (next) => void startLevel(next));
   setTerrainSource(hud, terrain.fromStudio, level.asset);
   setLoader(menus, 'Ready', true);
   setHudVisible(hud, true);
-  setGameContext({ biome: level.id, course: level.name });
+  setGameContext({ biome: level.id, course: level.name, daily: utcDayKey() });
   gameplayStart();
 }
 
@@ -259,7 +296,7 @@ function openMenu(): void {
 }
 
 function finish(kind: 'clear' | 'crash' | 'timeout'): void {
-  if (session.phase !== 'flying' && session.phase !== 'countdown') return;
+  if (session.phase !== 'flying' && session.phase !== 'countdown' && session.phase !== 'launch') return;
   session.phase = 'results';
   session.result = kind;
   paused = false;
@@ -271,12 +308,18 @@ function finish(kind: 'clear' | 'crash' | 'timeout'): void {
   gameplayStop();
   clearGameContext();
   const stars = starCount(score.total, level.starScores, kind === 'clear');
-  progress = recordResult(progress, level.id, stars, Math.floor(score.total));
+  const total = Math.floor(score.total);
+  const prevBest = progress.best[level.id] ?? 0;
+  progress = recordResult(progress, level.id, stars, total);
+  if (kind === 'clear' && ghostSamples.length > 6) saveGhost(level.id, { score: total, samples: ghostSamples });
+  void submitScore(total);
   const earned = Object.values(progress.stars).reduce((sum, n) => sum + n, 0);
   reportCompletion((earned / 12) * 100);
   if (kind === 'clear' && stars >= 3) happyTime();
   const nextId = nextUnlocked(progress, level.id);
   const nextOpen = nextId !== level.id;
+  const ghostNote = kind === 'clear' && total >= prevBest ? 'Ghost saved — beat the cyan wing next run.' : '';
+  const board = `Daily ${utcDayKey()} · best ${Math.max(prevBest, total).toLocaleString()}`;
   showResults(
     menus,
     kind,
@@ -287,6 +330,7 @@ function finish(kind: 'clear' | 'crash' | 'timeout'): void {
     () => void startLevel(nextId),
     openMenu,
     nextOpen,
+    [board, ghostNote].filter(Boolean).join(' · '),
   );
 }
 
@@ -325,6 +369,28 @@ function tickPlay(dt: number): void {
   }
 
   paintCoach(dt);
+
+  if (session.phase === 'launch' && launch) {
+    const groundY = sampleGround(pos);
+    const ahead = pos.clone().add(new THREE.Vector3(Math.sin(launch.heading) * 6, 0, Math.cos(launch.heading) * 6));
+    const aheadGround = sampleGround(ahead);
+    const wantRun = input.state.speedBar > 0.2 || input.state.dive > 0.2;
+    const stage = stepLaunch(launch, pos, groundY, aheadGround, wantRun, dt);
+    flight.heading = launch.heading;
+    flight.speed = wantRun ? 5.4 : 2.4;
+    flight.asl = pos.y;
+    flight.agl = groundY !== null ? pos.y - groundY : 8;
+    setCanopyDeploy(glider, launch.inflate);
+    if (stage === 'running') setPilotGait(glider, wantRun ? 'run' : 'walk');
+    if (stage === 'inflate') setPilotGait(glider, 'jump');
+    if (stage === 'done') {
+      setCanopyDeploy(glider, 1);
+      setPilotGait(glider, 'sit');
+      session.phase = 'countdown';
+      session.countdown = 2.2;
+      launch = null;
+    }
+  }
 
   if (session.phase === 'countdown') {
     session.countdown -= dt;
@@ -365,7 +431,13 @@ function tickPlay(dt: number): void {
       inThermal: insideThermal(course, pos),
       inDowndraft: insideHazard(course, pos),
       wind,
+      glideTax: level.glideTax,
+      overBrakeSink: level.overBrakeSink,
+      ridgeLift: level.ridgeLift,
     });
+    flyClock += dt;
+    recordGhost(ghostSamples, flyClock, pos, flight.heading, flight.bank);
+    if (ghost) stepGhost(ghost, flyClock);
     const magnet = nextRing(course);
     if (magnet) assistToward(flight, pos, magnet.position, dt);
     tickCombo(score, dt);
@@ -395,6 +467,11 @@ function tickPlay(dt: number): void {
       popups.push(spawnPopup(popupHost, pos, `+${pts}`, '#7cf0ff'));
     }
 
+    if (level.waterCrash && level.water && pos.y < level.waterLevel + 1.35 && !padResult(course, pos)) {
+      audio.playLandingSound(false);
+      finish('crash');
+      return;
+    }
     if (flight.agl <= LANDING_AGL + 0.05 && padResult(course, pos)) handleLanding();
   }
 
@@ -418,16 +495,27 @@ function tickPlay(dt: number): void {
   updateThermalDust(dust, course.thermals, clock.elapsedTime);
   updateWater(terrain.water, dt, atmo.sunDir);
   stepCamera(camera, atmo, pos, flight, dt, glider, input.state.fpv);
-  const hint = nxt
-    ? `Next ring · ${pos.distanceTo(nxt.position).toFixed(0)} m`
-    : 'Flare and land on the bullseye';
+  const hint =
+    session.phase === 'launch'
+      ? 'W sprints the ridge — the wing opens when you step off'
+      : flight.stall
+        ? 'STALL — ease both brakes to recover'
+        : nxt
+          ? `Next ring · ${pos.distanceTo(nxt.position).toFixed(0)} m`
+          : 'Flare and land on the bullseye';
   paintHud(hud, score, flight, session.timeLeft, score.ringsHit, course.rings.length, hint);
+  if (visorEl) visorEl.hidden = !input.state.fpv;
   updatePopups(popups, camera, window.innerWidth, window.innerHeight, dt);
 }
 
 function frame(): void {
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'results') {
+  if (
+    session.phase === 'countdown' ||
+    session.phase === 'flying' ||
+    session.phase === 'results' ||
+    session.phase === 'launch'
+  ) {
     tickPlay(dt);
   }
   composer.render();
@@ -475,7 +563,9 @@ function bindPauseUi(): void {
   document.querySelector('#btn-pause')?.addEventListener('click', () => togglePause());
   document.querySelector('#btn-resume')?.addEventListener('click', () => setPaused(false));
   document.querySelector('#btn-pause-retry')?.addEventListener('click', () => {
-    if (session.phase === 'flying' || session.phase === 'countdown') void startLevel(level.id);
+    if (session.phase === 'flying' || session.phase === 'countdown' || session.phase === 'launch') {
+      void startLevel(level.id);
+    }
   });
   document.querySelector('#btn-pause-menu')?.addEventListener('click', () => openMenu());
   if (volSlider) {
@@ -503,7 +593,11 @@ async function boot(): Promise<void> {
   bindAudioToggle();
   bindPauseUi();
   bindLookControls(renderer.domElement, () =>
-    !paused && (session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'results'),
+    !paused &&
+      (session.phase === 'countdown' ||
+        session.phase === 'flying' ||
+        session.phase === 'results' ||
+        session.phase === 'launch'),
   );
 
   // Browsers block AudioContext until a gesture; keep trying until it runs.
@@ -527,8 +621,12 @@ async function boot(): Promise<void> {
 
   window.addEventListener('keydown', (event) => {
     const key = event.key.toLowerCase();
-    const live = session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'results';
-    if (key === 'r' && (session.phase === 'flying' || session.phase === 'results')) {
+    const live =
+      session.phase === 'countdown' ||
+      session.phase === 'flying' ||
+      session.phase === 'results' ||
+      session.phase === 'launch';
+    if (key === 'r' && (session.phase === 'flying' || session.phase === 'results' || session.phase === 'launch')) {
       void startLevel(level.id);
     }
     if (key === 'm' && !event.repeat) {

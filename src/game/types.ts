@@ -1,6 +1,7 @@
 export type LevelId = 'alpine' | 'coastal' | 'dune' | 'ridge';
 export type RingKind = 'green' | 'gold' | 'boost';
-export type Phase = 'boot' | 'menu' | 'load' | 'countdown' | 'flying' | 'results';
+export type Phase = 'boot' | 'menu' | 'load' | 'launch' | 'countdown' | 'flying' | 'results';
+export type Sport = 'teach' | 'skim' | 'thermal' | 'ridge';
 export type ResultKind = 'clear' | 'crash' | 'timeout';
 
 export interface RingSpec {
@@ -60,6 +61,12 @@ export interface LevelDef {
   downdrafts: ZoneSpec[];
   orbs: ZoneSpec[];
   gustStrength: number;
+  sport: Sport;
+  launch: boolean;
+  waterCrash: boolean;
+  glideTax: number;
+  overBrakeSink: number;
+  ridgeLift: number;
 }
 
 export interface FlightState {
@@ -85,9 +92,19 @@ export interface FlightState {
   weightShift: number;
   bigEars: boolean;
   stall: boolean;
+  stallCharge: number;
   harnessRoll: number;
   harnessPitch: number;
   glideRatio: number;
+}
+
+export interface GhostSample {
+  t: number;
+  x: number;
+  y: number;
+  z: number;
+  heading: number;
+  bank: number;
 }
 
 export interface ScoreState {

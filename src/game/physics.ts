@@ -43,6 +43,7 @@ export function createFlight(): FlightState {
     weightShift: 0,
     bigEars: false,
     stall: false,
+    stallCharge: 0,
     harnessRoll: 0,
     harnessPitch: 0,
     glideRatio: GLIDE_RATIO,
@@ -59,6 +60,9 @@ export interface PhysicsContext {
   inThermal: boolean;
   inDowndraft: boolean;
   wind: THREE.Vector3;
+  glideTax?: number;
+  overBrakeSink?: number;
+  ridgeLift?: number;
 }
 
 export function stepPhysics(ctx: PhysicsContext): void {
@@ -75,7 +79,7 @@ export function stepPhysics(ctx: PhysicsContext): void {
 
   const symBrake = Math.min(flight.leftBrake, flight.rightBrake);
   const diffBrake = flight.leftBrake - flight.rightBrake; // >0 turns left, <0 turns right
-  flight.flare = symBrake > 0.4 || input.flare;
+  flight.flare = input.flare || (symBrake > 0.4 && flight.agl < 8);
 
   flight.inThermal = ctx.inThermal;
   flight.inDowndraft = ctx.inDowndraft && !wantBoost;
@@ -187,6 +191,32 @@ export function stepPhysics(ctx: PhysicsContext): void {
   if (ctx.clearance < 25 && ctx.wind.lengthSq() > 1 && ctx.groundY !== null) {
     const slopeLift = Math.min(3.0, (25 - ctx.clearance) * 0.14 * Math.max(0, -ctx.wind.z));
     sink += slopeLift;
+  }
+  if ((ctx.ridgeLift ?? 0) > 0 && ctx.clearance < 22) {
+    sink += (ctx.ridgeLift ?? 0) * ((22 - ctx.clearance) / 22);
+  }
+
+  if (!ctx.inThermal && (ctx.glideTax ?? 0) > 0) {
+    sink -= ctx.glideTax ?? 0;
+  }
+
+  const dual = Math.min(flight.leftBrake, flight.rightBrake);
+  const landingWindow = flight.agl < 8;
+  if ((ctx.overBrakeSink ?? 0) > 0 && dual > 0.55 && !landingWindow) {
+    sink -= (ctx.overBrakeSink ?? 0) * (dual - 0.55);
+  }
+
+  // Hold both brakes too long away from the pad and the wing folds.
+  if (dual > 0.82 && !landingWindow && !wantBoost) {
+    flight.stallCharge = Math.min(1.6, flight.stallCharge + dt);
+  } else {
+    flight.stallCharge = Math.max(0, flight.stallCharge - dt * 1.4);
+  }
+  flight.stall = flight.stallCharge > 1.05;
+  if (flight.stall) {
+    sink -= 5.8;
+    flight.speed = Math.max(MIN_SPEED * 0.7, flight.speed - 9 * dt);
+    flight.bank += Math.sin(position.z * 0.4) * 0.55 * dt;
   }
 
   flight.verticalSpeed = damp(flight.verticalSpeed, sink, 4.8, dt);

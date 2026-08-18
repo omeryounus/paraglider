@@ -3,14 +3,20 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { damp } from '../game/math';
 import type { FlightState } from '../game/types';
 
+export type PilotGait = 'sit' | 'walk' | 'run' | 'jump' | 'die';
+
 export interface MixamoPilot {
   root: THREE.Group;
   mixer: THREE.AnimationMixer;
   bones: Record<string, THREE.Bone>;
   bind: Record<string, THREE.Quaternion>;
   idle: THREE.AnimationAction | null;
+  walk: THREE.AnimationAction | null;
+  run: THREE.AnimationAction | null;
+  jump: THREE.AnimationAction | null;
   dying: THREE.AnimationAction | null;
   dead: boolean;
+  gait: PilotGait;
   age: number;
   leftGrip: THREE.Object3D;
   rightGrip: THREE.Object3D;
@@ -161,20 +167,21 @@ export async function loadMixamoPilot(): Promise<MixamoPilot | null> {
     const rightGrip = makeGrip('RightToggleGrip', bones.RightHand);
 
     const mixer = new THREE.AnimationMixer(root);
-    const idleClip = gltf.animations.find((c) => /idle/i.test(c.name));
-    const dyingClip = gltf.animations.find((c) => /dy/i.test(c.name));
-    const idle = idleClip ? mixer.clipAction(idleClip) : null;
-    const dying = dyingClip ? mixer.clipAction(dyingClip) : null;
-    if (idle) {
-      idle.setLoop(THREE.LoopRepeat, Infinity);
-      idle.enabled = false;
-      idle.weight = 0;
-    }
-    if (dying) {
-      dying.setLoop(THREE.LoopOnce, 1);
-      dying.clampWhenFinished = true;
-      dying.enabled = false;
-    }
+    const clipOf = (re: RegExp) => gltf.animations.find((c) => re.test(c.name));
+    const makeLoop = (clip: THREE.AnimationClip | undefined, loop: THREE.AnimationActionLoopStyles) => {
+      if (!clip) return null;
+      const action = mixer.clipAction(clip);
+      action.setLoop(loop, loop === THREE.LoopOnce ? 1 : Infinity);
+      action.clampWhenFinished = loop === THREE.LoopOnce;
+      action.enabled = false;
+      action.weight = 0;
+      return action;
+    };
+    const idle = makeLoop(clipOf(/idle/i), THREE.LoopRepeat);
+    const walk = makeLoop(clipOf(/walk/i), THREE.LoopRepeat);
+    const run = makeLoop(clipOf(/run/i), THREE.LoopRepeat);
+    const jump = makeLoop(clipOf(/jump/i), THREE.LoopOnce);
+    const dying = makeLoop(clipOf(/dy/i), THREE.LoopOnce);
 
     const mixamo: MixamoPilot = {
       root,
@@ -182,8 +189,12 @@ export async function loadMixamoPilot(): Promise<MixamoPilot | null> {
       bones,
       bind,
       idle,
+      walk,
+      run,
+      jump,
       dying,
       dead: false,
+      gait: 'sit',
       age: 0,
       leftGrip,
       rightGrip,
@@ -218,6 +229,7 @@ const REST_FLIGHT: FlightState = {
   weightShift: 0,
   bigEars: false,
   stall: false,
+  stallCharge: 0,
   harnessRoll: 0,
   harnessPitch: 0,
   glideRatio: 11,
@@ -226,10 +238,31 @@ const REST_FLIGHT: FlightState = {
 export function playMixamoDying(mixamo: MixamoPilot): void {
   if (mixamo.dead || !mixamo.dying) return;
   mixamo.dead = true;
-  mixamo.dying.enabled = true;
-  mixamo.dying.reset();
-  mixamo.dying.setEffectiveWeight(1);
-  mixamo.dying.play();
+  setMixamoGait(mixamo, 'die');
+}
+
+export function setMixamoGait(mixamo: MixamoPilot, gait: PilotGait): void {
+  if (mixamo.gait === gait && gait !== 'die') return;
+  mixamo.gait = gait;
+  const all = [mixamo.idle, mixamo.walk, mixamo.run, mixamo.jump, mixamo.dying];
+  const pick =
+    gait === 'walk' ? mixamo.walk :
+    gait === 'run' ? mixamo.run :
+    gait === 'jump' ? mixamo.jump :
+    gait === 'die' ? mixamo.dying :
+    null;
+  for (const action of all) {
+    if (!action) continue;
+    if (action === pick) {
+      action.enabled = true;
+      action.reset();
+      action.setEffectiveWeight(1);
+      action.play();
+    } else {
+      action.fadeOut(0.16);
+      action.enabled = action === mixamo.dying;
+    }
+  }
 }
 
 export function poseMixamoPilot(
@@ -239,6 +272,29 @@ export function poseMixamoPilot(
   dt: number,
 ): void {
   try {
+    if (mixamo.gait !== 'sit' && !mixamo.dead) {
+      mixamo.age += dt;
+      mixamo.mixer.update(dt);
+      const hasClip =
+        (mixamo.gait === 'walk' && mixamo.walk) ||
+        (mixamo.gait === 'run' && mixamo.run) ||
+        (mixamo.gait === 'jump' && mixamo.jump);
+      if (!hasClip) {
+        const cadence = mixamo.gait === 'run' ? 11 : 7;
+        const swing = Math.sin(mixamo.age * cadence) * (mixamo.gait === 'run' ? 0.85 : 0.55);
+        const { bones, bind } = mixamo;
+        fromBind(bones.LeftUpLeg, bind.LeftUpLeg, swing, 0.05, 0.08);
+        fromBind(bones.RightUpLeg, bind.RightUpLeg, -swing, -0.05, -0.08);
+        fromBind(bones.LeftLeg, bind.LeftLeg, -0.4 - Math.max(0, swing) * 0.6, 0, 0);
+        fromBind(bones.RightLeg, bind.RightLeg, -0.4 - Math.max(0, -swing) * 0.6, 0, 0);
+        fromBind(bones.LeftArm, bind.LeftArm, -swing * 0.45, 0.2, -0.15);
+        fromBind(bones.RightArm, bind.RightArm, swing * 0.45, -0.2, 0.15);
+      }
+      mixamo.root.rotation.x = damp(mixamo.root.rotation.x, 0, 8, dt);
+      mixamo.root.rotation.z = damp(mixamo.root.rotation.z, 0, 8, dt);
+      mixamo.root.updateMatrixWorld(true);
+      return;
+    }
     poseSeatedPilot(mixamo, flight, steer, dt);
   } catch (err) {
     console.error('poseMixamoPilot', err);

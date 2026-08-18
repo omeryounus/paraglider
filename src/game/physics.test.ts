@@ -75,6 +75,13 @@ describe('isWallFold', () => {
     expect(isWallFold(1.55, 0.4)).toBe(false);
   });
 
+  it('stalls after holding both brakes away from the ground', () => {
+    const flight = drive(idle({ leftBrake: 1, rightBrake: 1, flare: false }), 1.4);
+    expect(flight.stallCharge).toBeGreaterThan(1);
+    expect(flight.stall).toBe(true);
+    expect(flight.verticalSpeed).toBeLessThan(-3);
+  });
+
   it('skims terrain instead of locking sink when AGL bottoms out', () => {
     const flight = createFlight();
     flight.verticalSpeed = -4;

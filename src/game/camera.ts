@@ -97,18 +97,21 @@ export function stepCamera(
   glider.helmet.visible = !firstPerson;
 
   if (firstPerson) {
-    const fov = damp(camera.fov, 68 + speedT * 8 + (boost ? 6 : 0), 5, dt);
+    const fov = damp(camera.fov, 64 + speedT * 6 + (boost ? 5 : 0), 5, dt);
     camera.fov = fov;
     camera.updateProjectionMatrix();
-    glider.eye.getWorldPosition(eyePos);
     const lookYaw = flight.heading + lookRig.yaw;
     fwd.set(Math.sin(lookYaw), 0, Math.cos(lookYaw));
-    ideal.copy(eyePos).addScaledVector(fwd, -0.55);
-    ideal.y += 0.18;
-    camera.position.lerp(ideal, 1 - Math.exp(-10 * dt));
-    lookTarget.copy(eyePos).addScaledVector(fwd, 8);
-    lookTarget.y += 0.22 + lookRig.pitch * 6;
-    look.lerp(lookTarget, 1 - Math.exp(-8 * dt));
+    glider.eye.getWorldPosition(eyePos);
+    const mixamo = glider.root.userData.mixamoPilot as { bones?: Record<string, THREE.Bone> } | undefined;
+    const head = mixamo?.bones?.Head;
+    if (head) head.getWorldPosition(eyePos);
+    ideal.copy(eyePos).addScaledVector(fwd, 0.12);
+    ideal.y += 0.08;
+    camera.position.lerp(ideal, 1 - Math.exp(-12 * dt));
+    lookTarget.copy(eyePos).addScaledVector(fwd, 7.5);
+    lookTarget.y -= 0.35 + lookRig.pitch * 5;
+    look.lerp(lookTarget, 1 - Math.exp(-9 * dt));
     camera.lookAt(look);
     trackSun(atmo, pos);
     return { fov: camera.fov, shake: boost ? 0.08 : 0 };

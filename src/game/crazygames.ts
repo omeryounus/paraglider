@@ -1,6 +1,10 @@
 type CrazySdk = {
   init: () => Promise<void>;
   environment?: 'local' | 'crazygames' | 'disabled';
+  user?: {
+    submitScore?: (opts: { score: number }) => Promise<unknown>;
+    getUser?: () => Promise<{ username?: string } | null>;
+  };
   game?: {
     settings?: { muteAudio?: boolean };
     addSettingsChangeListener?: (fn: (s: { muteAudio?: boolean }) => void) => void;
@@ -131,6 +135,15 @@ export function storageGet(key: string): string | null {
     return localStorage.getItem(key);
   } catch {
     return null;
+  }
+}
+
+export async function submitScore(score: number): Promise<void> {
+  if (!ready) return;
+  try {
+    await sdk()?.user?.submitScore?.({ score: Math.max(0, Math.floor(score)) });
+  } catch {
+    /* portal may not have a board yet */
   }
 }
 
