@@ -63,10 +63,19 @@ export function fillBiomeSelect(
   hud.biome.onchange = () => onPick(hud.biome.value as LevelId);
 }
 
+export type HudLesson = 'steer' | 'open' | 'flare' | 'full';
+
 export function setHudVisible(hud: HudRefs, visible: boolean): void {
   hud.root.hidden = !visible;
   const rig = document.querySelector<HTMLElement>('#cam-rig');
   if (rig) rig.hidden = !visible;
+}
+
+export function setHudLesson(lesson: HudLesson): void {
+  const root = document.getElementById('app');
+  if (!root) return;
+  root.classList.remove('lesson-steer', 'lesson-open', 'lesson-flare');
+  if (lesson !== 'full') root.classList.add(`lesson-${lesson}`);
 }
 
 export function setTerrainSource(hud: HudRefs, studio: boolean, asset: string): void {

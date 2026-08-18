@@ -14,10 +14,9 @@ describe('daily line', () => {
     expect(utcDayKey(Date.parse('2026-08-18T12:00:00Z'))).toBe('2026-08-18');
   });
 
-  it('keeps Alpine laterals modest', () => {
-    const alpine = applyDailyLine(getLevel('alpine'), '2026-08-18');
-    for (const ring of alpine.rings) {
-      expect(Math.abs(ring.lateral)).toBeLessThan(20);
-    }
+  it('leaves the Alpine teach line unshuffled', () => {
+    const base = getLevel('alpine');
+    const alpine = applyDailyLine(base, '2026-08-18');
+    expect(alpine.rings.map((r) => r.lateral)).toEqual(base.rings.map((r) => r.lateral));
   });
 });

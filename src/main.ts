@@ -43,7 +43,7 @@ import {
   setGameContext,
   submitScore,
 } from './game/crazygames';
-import { isUnlocked, loadProgress, newSession, nextUnlocked, recordResult, type Session } from './game/state';
+import { isUnlocked, loadProgress, nextUnlocked, recordResult, type Session } from './game/state';
 import { loadTerrain, purgeTerrainFromScene, type TerrainWorld } from './game/terrain';
 import { updateWater } from './game/water';
 import type { FlightState, GhostSample, LevelDef, LevelId, Progress, ScoreState } from './game/types';
@@ -51,7 +51,7 @@ import { attachStudioAssets, createGlider, playPilotDying, poseGlider, setCanopy
 import { createGhostVisual, stepGhost, type GhostVisual } from './entities/ghostGlider';
 import { createThermalDust, spawnPopup, updatePopups, updateThermalDust, type Popup } from './entities/effects';
 import { paintWaypointHud } from './entities/waypointArrow';
-import { bindHud, fillBiomeSelect, paintHud, setHudVisible, setTerrainSource } from './ui/hud';
+import { bindHud, fillBiomeSelect, paintHud, setHudLesson, setHudVisible, setTerrainSource, type HudLesson } from './ui/hud';
 import {
   bindMenus,
   hideResults,
@@ -103,10 +103,9 @@ const coachEl = document.querySelector<HTMLElement>('#coach')!;
 const volSlider = document.querySelector<HTMLInputElement>('#vol-slider');
 
 const ALPINE_COACH: Array<{ until: number; text: string }> = [
-  { until: 6, text: 'W runs the ridge. The wing inflates when you step off.' },
-  { until: 12, text: 'A / D banks. Fly the wide green gates.' },
-  { until: 18, text: 'Blue column = lift. S / Space flares for the pad.' },
-  { until: 24, text: 'Hold both brakes too long and the wing folds. Ease off to recover.' },
+  { until: 18, text: 'A / D or drag left / right. That is the whole game for now.' },
+  { until: 36, text: 'Blue air is lift. Drift through it.' },
+  { until: 90, text: 'Near the pad: hold Space or FLARE.' },
 ];
 
 let progress: Progress = loadProgress();
@@ -124,7 +123,9 @@ let launch: LaunchState | null = null;
 let ghost: GhostVisual | null = null;
 let ghostSamples: GhostSample[] = [];
 let flyClock = 0;
+let lesson: HudLesson = 'full';
 const visorEl = document.querySelector<HTMLElement>('#visor');
+const titleEl = document.querySelector<HTMLElement>('#title-card');
 
 const sampleGround = (origin: THREE.Vector3): number | null => {
   if (!terrain) return null;
@@ -171,18 +172,57 @@ function togglePause(): void {
   setPaused(!paused);
 }
 
+function hideTitle(): void {
+  if (titleEl) titleEl.hidden = true;
+}
+
+function showTitle(): void {
+  if (titleEl) titleEl.hidden = false;
+}
+
+function playInput() {
+  const raw = input.state;
+  if (lesson === 'steer') {
+    return {
+      ...raw,
+      dive: 0,
+      speedBar: 0,
+      flare: false,
+      boost: false,
+      bigEars: false,
+    };
+  }
+  if (lesson === 'open') {
+    return { ...raw, boost: false, bigEars: false };
+  }
+  return raw;
+}
+
+function syncLesson(): void {
+  if (level.id !== 'alpine') {
+    lesson = 'full';
+    setHudLesson('full');
+    return;
+  }
+  const nxt = course ? nextRing(course) : null;
+  if (!nxt) lesson = 'flare';
+  else if (flyClock > 20 || (score.ringsHit > 0 && flyClock > 8)) lesson = 'open';
+  else lesson = 'steer';
+  setHudLesson(lesson);
+}
+
 function hideCoach(): void {
   coachEl.hidden = true;
 }
 
 function paintCoach(dt: number): void {
-  const live = session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'launch';
-  if (level.id !== 'alpine' || !live || paused) {
-    if (!live) hideCoach();
+  const live = session.phase === 'flying';
+  if (level.id !== 'alpine' || !live || paused || lesson === 'steer') {
+    if (!live || lesson === 'steer') hideCoach();
     return;
   }
   coachElapsed += dt;
-  if (coachElapsed > 20) {
+  if (coachElapsed > 40) {
     hideCoach();
     return;
   }
@@ -207,7 +247,24 @@ function clearWorld(): void {
   }
 }
 
-async function startLevel(id: LevelId): Promise<void> {
+function beginFlight(): void {
+  if (session.phase !== 'attract') return;
+  hideTitle();
+  audio.init();
+  audio.resume();
+  audio.startBed();
+  session.phase = 'flying';
+  session.countdown = 0;
+  setCountdown(menus, null);
+  setCanopyDeploy(glider, 1);
+  setPilotGait(glider, 'sit');
+  setHudVisible(hud, true);
+  lesson = 'steer';
+  setHudLesson('steer');
+  gameplayStart();
+}
+
+async function startLevel(id: LevelId, attract = false): Promise<void> {
   if (!isUnlocked(progress, id)) {
     openMenu();
     return;
@@ -225,8 +282,9 @@ async function startLevel(id: LevelId): Promise<void> {
   inThermalLast = false;
   showSelect(menus, false);
   hideResults(menus);
+  hideTitle();
   setHudVisible(hud, false);
-  setLoader(menus, `Building ${getLevel(id).name}…`, false);
+  setLoader(menus, attract ? 'Spinning up the canyon…' : `Building ${getLevel(id).name}…`, false);
   clearWorld();
 
   level = applyDailyLine(getLevel(id));
@@ -247,7 +305,7 @@ async function startLevel(id: LevelId): Promise<void> {
   }
   const heading = spawnHeading(terrain);
   flight.heading = heading;
-  if (level.launch) {
+  if (level.launch && !attract) {
     const spawn = launchPoint(level, terrain);
     glider.root.position.copy(spawn);
     flight.asl = spawn.y;
@@ -261,7 +319,6 @@ async function startLevel(id: LevelId): Promise<void> {
     const spawn = spawnPoint(level, terrain);
     glider.root.position.copy(spawn);
     flight.asl = spawn.y;
-    session = newSession(level.parTime);
     setCanopyDeploy(glider, 1);
     setPilotGait(glider, 'sit');
     camera.position.set(
@@ -269,15 +326,28 @@ async function startLevel(id: LevelId): Promise<void> {
       spawn.y + 2.2,
       spawn.z - Math.cos(heading) * 11.5,
     );
+    session = attract
+      ? { phase: 'attract', result: null, timeLeft: level.parTime, countdown: 0 }
+      : { phase: 'flying', result: null, timeLeft: level.parTime, countdown: 0 };
   }
   resetLook();
   snapCamera(glider.root.position, flight.heading);
   fillBiomeSelect(hud, level.id, progress, (next) => void startLevel(next));
   setTerrainSource(hud, terrain.fromStudio, level.asset);
   setLoader(menus, 'Ready', true);
-  setHudVisible(hud, true);
-  setGameContext({ biome: level.id, course: level.name, daily: utcDayKey() });
-  gameplayStart();
+  if (attract) {
+    setHudVisible(hud, false);
+    showTitle();
+    lesson = 'steer';
+    setHudLesson('steer');
+    setGameContext({ biome: level.id, course: level.name, daily: utcDayKey() });
+  } else {
+    hideTitle();
+    setHudVisible(hud, true);
+    syncLesson();
+    setGameContext({ biome: level.id, course: level.name, daily: utcDayKey() });
+    gameplayStart();
+  }
 }
 
 function openMenu(): void {
@@ -286,10 +356,12 @@ function openMenu(): void {
   pauseEl.hidden = true;
   renderer.domElement.style.pointerEvents = '';
   hideCoach();
+  hideTitle();
   audio.stopBed();
   gameplayStop();
   clearGameContext();
   setHudVisible(hud, false);
+  setHudLesson('full');
   hideResults(menus);
   renderLevelSelect(menus, progress, (id) => void startLevel(id));
   showSelect(menus, true);
@@ -399,12 +471,13 @@ function tickPlay(dt: number): void {
       session.phase = 'flying';
       setCountdown(menus, null);
     }
-    flight.leftBrake = input.state.leftBrake;
-    flight.rightBrake = input.state.rightBrake;
-    flight.weightShift = input.state.weightShift;
-    flight.flare = input.state.flare;
-    flight.speedBar = input.state.speedBar;
-    flight.bigEars = input.state.bigEars;
+    const gated = playInput();
+    flight.leftBrake = gated.leftBrake;
+    flight.rightBrake = gated.rightBrake;
+    flight.weightShift = gated.weightShift;
+    flight.flare = gated.flare;
+    flight.speedBar = gated.speedBar;
+    flight.bigEars = gated.bigEars;
   }
 
   wind.set(
@@ -421,10 +494,11 @@ function tickPlay(dt: number): void {
     }
     const groundY = sampleGround(pos);
     const clearance = sampleClearance(pos, flight.heading);
+    syncLesson();
     stepPhysics({
       flight,
       position: pos,
-      input: input.state,
+      input: playInput(),
       dt,
       groundY,
       clearance,
@@ -479,10 +553,10 @@ function tickPlay(dt: number): void {
   audio.update(
     flight.speed,
     flight.verticalSpeed,
-    session.phase === 'flying' || session.phase === 'countdown',
+    session.phase === 'flying' || session.phase === 'countdown' || session.phase === 'attract',
   );
 
-  poseGlider(glider, flight, input.state.steer, clock.elapsedTime, dt);
+  poseGlider(glider, flight, session.phase === 'attract' ? 0 : playInput().steer, clock.elapsedTime, dt);
   const nxt = nextRing(course);
   const wayTarget = nxt ? nxt.position : course.pad.position;
   paintWaypointHud(
@@ -496,13 +570,19 @@ function tickPlay(dt: number): void {
   updateWater(terrain.water, dt, atmo.sunDir);
   stepCamera(camera, atmo, pos, flight, dt, glider, input.state.fpv);
   const hint =
-    session.phase === 'launch'
-      ? 'W sprints the ridge — the wing opens when you step off'
-      : flight.stall
-        ? 'STALL — ease both brakes to recover'
-        : nxt
-          ? `Next ring · ${pos.distanceTo(nxt.position).toFixed(0)} m`
-          : 'Flare and land on the bullseye';
+    session.phase === 'attract'
+      ? ''
+      : session.phase === 'launch'
+        ? 'W sprints the ridge — the wing opens when you step off'
+        : flight.stall
+          ? 'STALL — ease both brakes to recover'
+          : lesson === 'steer'
+            ? 'A / D banks the wing'
+            : lesson === 'flare' || !nxt
+              ? 'Hold Space or FLARE onto the pad'
+              : nxt
+                ? `Next ring · ${pos.distanceTo(nxt.position).toFixed(0)} m`
+                : 'Flare and land on the bullseye';
   paintHud(hud, score, flight, session.timeLeft, score.ringsHit, course.rings.length, hint);
   if (visorEl) visorEl.hidden = !input.state.fpv;
   updatePopups(popups, camera, window.innerWidth, window.innerHeight, dt);
@@ -514,7 +594,8 @@ function frame(): void {
     session.phase === 'countdown' ||
     session.phase === 'flying' ||
     session.phase === 'results' ||
-    session.phase === 'launch'
+    session.phase === 'launch' ||
+    session.phase === 'attract'
   ) {
     tickPlay(dt);
   }
@@ -619,8 +700,17 @@ async function boot(): Promise<void> {
     resizeComposer(composer, renderer);
   });
 
+  titleEl?.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    beginFlight();
+  });
+
   window.addEventListener('keydown', (event) => {
     const key = event.key.toLowerCase();
+    if (session.phase === 'attract' && key !== 'escape') {
+      beginFlight();
+      return;
+    }
     const live =
       session.phase === 'countdown' ||
       session.phase === 'flying' ||
@@ -645,11 +735,12 @@ async function boot(): Promise<void> {
   });
 
   renderLevelSelect(menus, progress, (id) => void startLevel(id));
-  showSelect(menus, true);
-  setLoader(menus, 'Choose a canyon', true);
-  session.phase = 'menu';
-  void attachStudioAssets(glider).then(() => loadingStop());
+  showSelect(menus, false);
+  setLoader(menus, 'Spinning up the canyon…', false);
   frame();
+  await attachStudioAssets(glider);
+  loadingStop();
+  await startLevel('alpine', true);
 }
 
 void boot();

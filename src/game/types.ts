@@ -1,6 +1,6 @@
 export type LevelId = 'alpine' | 'coastal' | 'dune' | 'ridge';
 export type RingKind = 'green' | 'gold' | 'boost';
-export type Phase = 'boot' | 'menu' | 'load' | 'launch' | 'countdown' | 'flying' | 'results';
+export type Phase = 'boot' | 'menu' | 'load' | 'attract' | 'launch' | 'countdown' | 'flying' | 'results';
 export type Sport = 'teach' | 'skim' | 'thermal' | 'ridge';
 export type ResultKind = 'clear' | 'crash' | 'timeout';
 

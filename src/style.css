@@ -84,6 +84,66 @@ canvas {
 .loader-title { letter-spacing: 0.35em; font-weight: 800; font-size: 0.9rem; color: #fff; }
 #loader-status { color: var(--muted); font-size: 0.85rem; }
 
+#title-card {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.45rem;
+  text-align: center;
+  padding: 1.5rem;
+  background: radial-gradient(ellipse at 50% 38%, rgba(8, 16, 28, 0.18) 0%, rgba(6, 10, 16, 0.42) 72%);
+  cursor: pointer;
+}
+#title-card[hidden] { display: none !important; }
+#title-card h1 {
+  margin: 0;
+  font-size: clamp(2.2rem, 7vw, 4.2rem);
+  letter-spacing: -0.04em;
+  font-weight: 800;
+  text-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.title-cta {
+  margin-top: 0.8rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(8, 14, 22, 0.45);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+#app.lesson-steer .boost-wrap,
+#app.lesson-steer .hud-row,
+#app.lesson-steer .hud-row.instruments,
+#app.lesson-steer .biome-select,
+#app.lesson-steer #hud-source,
+#app.lesson-steer #cam-rig,
+#app.lesson-steer #btn-speedbar,
+#app.lesson-steer #btn-bigears,
+#app.lesson-steer #btn-boost,
+#app.lesson-steer #btn-cam,
+#app.lesson-steer #btn-gyro,
+#app.lesson-steer #btn-flare {
+  display: none !important;
+}
+#app.lesson-open #btn-bigears,
+#app.lesson-open #btn-boost,
+#app.lesson-open #btn-speedbar,
+#app.lesson-open .biome-select,
+#app.lesson-open #hud-source,
+#app.lesson-open .hud-row.instruments {
+  display: none !important;
+}
+#app.lesson-flare #btn-bigears,
+#app.lesson-flare #btn-boost,
+#app.lesson-flare #btn-speedbar,
+#app.lesson-flare .biome-select,
+#app.lesson-flare #hud-source {
+  display: none !important;
+}
+
 @keyframes billow {
   0%, 100% { transform: translateY(0) scaleX(1); }
   50% { transform: translateY(-7px) scaleX(1.08); }

@@ -27,7 +27,8 @@ function mulberry32(seed: number): () => number {
 /** Offset ring / thermal / hazard laterals for today's line. Alpine stays honest. */
 export function applyDailyLine(level: LevelDef, day = utcDayKey()): LevelDef {
   const rand = mulberry32(hashSeed(`${day}:${level.id}`));
-  const span = level.sport === 'teach' ? 6 : level.sport === 'ridge' ? 10 : 14;
+  if (level.sport === 'teach') return { ...level };
+  const span = level.sport === 'ridge' ? 10 : 14;
   const shift = (base: number) => {
     const next = base + (rand() * 2 - 1) * span;
     return Math.max(-level.path.halfWidth * 0.85, Math.min(level.path.halfWidth * 0.85, next));
