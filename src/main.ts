@@ -333,6 +333,11 @@ function tickPlay(dt: number): void {
       session.phase = 'flying';
       setCountdown(menus, null);
     }
+    flight.leftBrake = input.state.leftBrake;
+    flight.rightBrake = input.state.rightBrake;
+    flight.weightShift = input.state.weightShift;
+    flight.flare = input.state.flare;
+    flight.speedBar = input.state.speedBar;
   }
 
   wind.set(

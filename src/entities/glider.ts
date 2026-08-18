@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { loadMixamoPilot, playMixamoDying, poseMixamoPilot, type MixamoPilot } from './mixamoPilot';
+import {
+  loadMixamoPilot,
+  mixamoHandAnchors,
+  placeMixamoGear,
+  playMixamoDying,
+  poseMixamoPilot,
+  type MixamoPilot,
+} from './mixamoPilot';
 import {
   CANOPY_Y,
   CHORD,
@@ -752,13 +759,23 @@ export function poseGlider(
   // Rest is ear-level; pull drops the hands / brake toggles toward the hips
   pilot.leftArm.rotation.x = damp(pilot.leftArm.rotation.x, pilot.restArmX - leftPull * 1.05, 12, dt);
   pilot.rightArm.rotation.x = damp(pilot.rightArm.rotation.x, pilot.restArmX - rightPull * 1.05, 12, dt);
-  const restLY = (visual.root.userData.toggleRestL as number | undefined) ?? visual.leftToggle.position.y;
-  const restRY = (visual.root.userData.toggleRestR as number | undefined) ?? visual.rightToggle.position.y;
-  visual.leftToggle.position.y = restLY - leftPull * 0.38;
-  visual.rightToggle.position.y = restRY - rightPull * 0.38;
 
   const mixamo = visual.root.userData.mixamoPilot as MixamoPilot | undefined;
-  if (mixamo) poseMixamoPilot(mixamo, flight, steer, dt);
+  if (mixamo) {
+    poseMixamoPilot(mixamo, flight, steer, dt);
+    placeMixamoGear(
+      mixamo,
+      visual.leftRiser,
+      visual.rightRiser,
+      visual.root.getObjectByName('LeftCarabiner'),
+      visual.root.getObjectByName('RightCarabiner'),
+    );
+  } else {
+    const restLY = (visual.root.userData.toggleRestL as number | undefined) ?? visual.leftToggle.position.y;
+    const restRY = (visual.root.userData.toggleRestR as number | undefined) ?? visual.rightToggle.position.y;
+    visual.leftToggle.position.y = restLY - leftPull * 0.38;
+    visual.rightToggle.position.y = restRY - rightPull * 0.38;
+  }
   const person = visual.root.userData.hyper3dPerson as THREE.Object3D | undefined;
   if (person) {
     person.rotation.z = damp(person.rotation.z, weightShift * 0.22, 7, dt);
@@ -1138,7 +1155,17 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
     mixamo.root.position.y -= 0.08;
     rig.group.add(mixamo.root);
     visual.root.userData.mixamoPilot = mixamo;
+    const hands = mixamoHandAnchors(mixamo);
+    visual.root.userData.brakeLeft = hands.left;
+    visual.root.userData.brakeRight = hands.right;
     hideProceduralBody(visual);
+    placeMixamoGear(
+      mixamo,
+      visual.leftRiser,
+      visual.rightRiser,
+      visual.root.getObjectByName('LeftCarabiner'),
+      visual.root.getObjectByName('RightCarabiner'),
+    );
   }
 
   if (person) {
