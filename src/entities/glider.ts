@@ -1032,11 +1032,11 @@ function fitAsset(src: THREE.Object3D, targetSpan: number, axis: 'x' | 'y'): THR
 
 export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
   const parachute =
-    (await loadGlbScene('/models/parachute.glb', true)) ??
-    (await loadGlbScene('/models/canopy.glb', true));
+    (await loadGlbScene('./models/parachute.glb', true)) ??
+    (await loadGlbScene('./models/canopy.glb', true));
   const person =
-    (await loadGlbScene('/models/person.glb', false)) ??
-    (await loadGlbScene('/models/pilot.glb', false));
+    (await loadGlbScene('./models/person.glb', false)) ??
+    (await loadGlbScene('./models/pilot.glb', false));
 
   if (parachute) {
     parachute.name = 'Hyper3D_Parachute';

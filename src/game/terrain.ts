@@ -118,7 +118,7 @@ export async function loadTerrain(
 ): Promise<TerrainWorld> {
   purgeTerrainFromScene(scene);
   const studio =
-    (await tryLoad(`/terrains/${level.asset}.glb`)) ?? (await tryLoad(`/terrains/${level.id}.glb`));
+    (await tryLoad(`./terrains/${level.asset}.glb`)) ?? (await tryLoad(`./terrains/${level.id}.glb`));
   if (studio) {
     return mountStudio(studio, level, scene, sunDir);
   }

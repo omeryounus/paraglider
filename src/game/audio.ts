@@ -4,13 +4,13 @@
 import type { RingKind } from './types';
 
 const SAMPLE_URLS = {
-  ring: '/audio/ring.ogg',
-  gold: '/audio/ring-gold.ogg',
-  boost: '/audio/boost.ogg',
-  orb: '/audio/orb.ogg',
-  miss: '/audio/miss.ogg',
-  land: '/audio/land.ogg',
-  crash: '/audio/crash.ogg',
+  ring: './audio/ring.ogg',
+  gold: './audio/ring-gold.ogg',
+  boost: './audio/boost.ogg',
+  orb: './audio/orb.ogg',
+  miss: './audio/miss.ogg',
+  land: './audio/land.ogg',
+  crash: './audio/crash.ogg',
 } as const;
 
 class SoundEngine {
