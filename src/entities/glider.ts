@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { loadMixamoPilot, playMixamoDying, poseMixamoPilot, type MixamoPilot } from './mixamoPilot';
 import {
   CANOPY_Y,
   CHORD,
@@ -756,6 +757,8 @@ export function poseGlider(
   visual.leftToggle.position.y = restLY - leftPull * 0.38;
   visual.rightToggle.position.y = restRY - rightPull * 0.38;
 
+  const mixamo = visual.root.userData.mixamoPilot as MixamoPilot | undefined;
+  if (mixamo) poseMixamoPilot(mixamo, flight, steer, dt);
   const person = visual.root.userData.hyper3dPerson as THREE.Object3D | undefined;
   if (person) {
     person.rotation.z = damp(person.rotation.z, weightShift * 0.22, 7, dt);
@@ -969,6 +972,47 @@ function prepMaps(mat: THREE.MeshStandardMaterial, mipmaps = true): void {
   }
 }
 
+function hideProceduralBody(visual: GliderVisual): void {
+  const hide = new Set(['Chest', 'Head', 'Neck', 'Helmet', 'HeadShell']);
+  visual.root.getObjectByName('Pilot')?.traverse((child) => {
+    if (child.name === 'Harness' || child.name.endsWith('Riser') || child.name.endsWith('Toggle')) return;
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if (
+      mesh.name === 'SeatBase' ||
+      mesh.name === 'HarnessPack' ||
+      mesh.name === 'HipBelt' ||
+      mesh.name === 'ChestStrap'
+    ) {
+      mesh.visible = false;
+      return;
+    }
+    const underHarness =
+      mesh.parent?.name === 'Harness' ||
+      mesh.name.startsWith('Harness') ||
+      mesh.name.includes('Carabiner');
+    if (underHarness) return;
+    if (
+      hide.has(mesh.name) ||
+      mesh.name.includes('Arm') ||
+      mesh.name.includes('Hand') ||
+      mesh.name.includes('Leg') ||
+      mesh.name.includes('Foot') ||
+      mesh.name.includes('Thigh') ||
+      mesh.name.includes('Shin') ||
+      mesh.name.includes('Forearm') ||
+      mesh.name === 'Visor'
+    ) {
+      mesh.visible = false;
+    }
+  });
+}
+
+export function playPilotDying(visual: GliderVisual): void {
+  const mixamo = visual.root.userData.mixamoPilot as MixamoPilot | undefined;
+  if (mixamo) playMixamoDying(mixamo);
+}
+
 function isHelperMesh(mesh: THREE.Mesh): boolean {
   const name = mesh.name.toLowerCase();
   if (/(plane|shadow|catcher|bound|helper|grid|floor|ground|quad|card)/.test(name)) return true;
@@ -1034,9 +1078,11 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
   const parachute =
     (await loadGlbScene('./models/parachute.glb', true)) ??
     (await loadGlbScene('./models/canopy.glb', true));
-  const person =
-    (await loadGlbScene('./models/person.glb', false)) ??
-    (await loadGlbScene('./models/pilot.glb', false));
+  const mixamo = await loadMixamoPilot();
+  const person = mixamo
+    ? null
+    : ((await loadGlbScene('./models/person.glb', false)) ??
+      (await loadGlbScene('./models/pilot.glb', false)));
 
   if (parachute) {
     parachute.name = 'Hyper3D_Parachute';
@@ -1085,6 +1131,14 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
       visual.root.userData.studioSize = box.getSize(new THREE.Vector3());
       visual.root.userData.studioMinZ = box.min.z;
     }
+  }
+
+  if (mixamo) {
+    const rig = visual.root.userData.pilot as PilotRig;
+    mixamo.root.position.y -= 0.08;
+    rig.group.add(mixamo.root);
+    visual.root.userData.mixamoPilot = mixamo;
+    hideProceduralBody(visual);
   }
 
   if (person) {

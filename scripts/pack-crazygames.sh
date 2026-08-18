@@ -5,13 +5,14 @@ cd "$ROOT"
 npm run build
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
-mkdir -p "$STAGE/assets" "$STAGE/audio" "$STAGE/models" "$STAGE/terrains" "$STAGE/draco"
+mkdir -p "$STAGE/assets" "$STAGE/audio" "$STAGE/models/mixamo" "$STAGE/terrains" "$STAGE/draco"
 cp dist/index.html "$STAGE/"
 cp dist/assets/*.js "$STAGE/assets/" 2>/dev/null || true
 cp dist/assets/*.css "$STAGE/assets/"
 rm -f "$STAGE/assets/"*.map
 cp dist/audio/*.ogg "$STAGE/audio/"
 cp dist/models/person.glb dist/models/parachute.glb dist/models/pilot.glb dist/models/canopy.glb "$STAGE/models/"
+cp dist/models/mixamo/pilot.glb "$STAGE/models/mixamo/" 2>/dev/null || true
 cp dist/terrains/*.glb "$STAGE/terrains/"
 cp dist/draco/draco_decoder.js dist/draco/draco_decoder.wasm dist/draco/draco_wasm_wrapper.js "$STAGE/draco/"
 OUT="$ROOT/dist/aero-glide-crazygames.zip"

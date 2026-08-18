@@ -43,7 +43,7 @@ import { isUnlocked, loadProgress, newSession, nextUnlocked, recordResult, type 
 import { loadTerrain, purgeTerrainFromScene, type TerrainWorld } from './game/terrain';
 import { updateWater } from './game/water';
 import type { FlightState, LevelDef, LevelId, Progress, ScoreState } from './game/types';
-import { attachStudioAssets, createGlider, poseGlider } from './entities/glider';
+import { attachStudioAssets, createGlider, playPilotDying, poseGlider } from './entities/glider';
 import { createThermalDust, spawnPopup, updatePopups, updateThermalDust, type Popup } from './entities/effects';
 import { paintWaypointHud } from './entities/waypointArrow';
 import { bindHud, fillBiomeSelect, paintHud, setHudVisible, setTerrainSource } from './ui/hud';
@@ -267,6 +267,7 @@ function finish(kind: 'clear' | 'crash' | 'timeout'): void {
   renderer.domElement.style.pointerEvents = '';
   hideCoach();
   audio.stopBed();
+  if (kind === 'crash') playPilotDying(glider);
   gameplayStop();
   clearGameContext();
   const stars = starCount(score.total, level.starScores, kind === 'clear');
