@@ -843,15 +843,101 @@ function deformCanopy(
   visual.wing.geometry.computeVertexNormals();
 }
 
+function makeCanopyFabric(): THREE.CanvasTexture {
+  const w = 640;
+  const h = 160;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+  const cells = ['#141c28', '#e24b3a', '#f3ebe0', '#187a82', '#f3ebe0', '#d4a054', '#f3ebe0', '#187a82', '#f3ebe0', '#e24b3a', '#141c28'];
+  const n = cells.length;
+  for (let i = 0; i < n; i++) {
+    ctx.fillStyle = cells[i];
+    ctx.fillRect(Math.floor((i / n) * w), 0, Math.ceil(w / n) + 1, h);
+  }
+  ctx.fillStyle = '#f6f1e8';
+  ctx.fillRect(0, 0, w, Math.round(h * 0.11));
+  ctx.fillStyle = 'rgba(20,28,40,0.28)';
+  ctx.fillRect(0, Math.round(h * 0.86), w, Math.round(h * 0.14));
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function paintStudioCanopy(mesh: THREE.Mesh): void {
+  const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+  if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+  const box = mesh.geometry.boundingBox;
+  if (!box) return;
+  const size = box.getSize(new THREE.Vector3());
+  const halfX = Math.max(0.01, size.x * 0.5);
+  const spanZ = Math.max(0.01, size.z);
+  const uvs = new Float32Array(pos.count * 2);
+  for (let i = 0; i < pos.count; i++) {
+    const spanT = THREE.MathUtils.clamp(pos.getX(i) / halfX, -1, 1);
+    const chordT = THREE.MathUtils.clamp((pos.getZ(i) - box.min.z) / spanZ, 0, 1);
+    uvs[i * 2] = spanT * 0.5 + 0.5;
+    uvs[i * 2 + 1] = chordT;
+  }
+  mesh.geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  const fabric = makeCanopyFabric();
+  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  for (const raw of mats) {
+    const mat = raw as THREE.MeshStandardMaterial;
+    if (!mat?.isMeshStandardMaterial) continue;
+    mat.vertexColors = false;
+    mat.map = fabric;
+    mat.color.set(0xffffff);
+    mat.roughness = 0.62;
+    mat.metalness = 0;
+    mat.envMapIntensity = 0.22;
+    mat.needsUpdate = true;
+  }
+}
+
 function deformStudioCanopy(
-  _visual: GliderVisual,
-  _flight: FlightState,
-  _leftBrake: number,
-  _rightBrake: number,
-  _time: number,
+  visual: GliderVisual,
+  flight: FlightState,
+  leftBrake: number,
+  rightBrake: number,
+  time: number,
 ): void {
-  // Hyper3D canopy is a baked shell. Per-vertex flutter fights its normals
-  // and reads as a flickering black card when you orbit in front.
+  const mesh = visual.root.userData.studioCanopyMesh as THREE.Mesh | undefined;
+  const rest = visual.root.userData.studioRest as Float32Array | undefined;
+  const size = visual.root.userData.studioSize as THREE.Vector3 | undefined;
+  if (!mesh || !rest || !size) return;
+  const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+  const halfX = Math.max(0.01, size.x * 0.5);
+  const minZ = visual.root.userData.studioMinZ as number;
+  const spanZ = Math.max(0.01, size.z);
+  const speedNorm = THREE.MathUtils.clamp((flight.speed - 7) / 22, 0, 1);
+  const gust = flight.inThermal || flight.inDowndraft ? 1 : 0;
+  const ripple = 0.01 + speedNorm * 0.012 + gust * 0.014;
+  const ears = flight.bigEars ? 0.32 : 0;
+  for (let i = 0; i < pos.count; i++) {
+    const rx = rest[i * 3];
+    const ry = rest[i * 3 + 1];
+    const rz = rest[i * 3 + 2];
+    const spanT = rx / halfX;
+    const chordT = (rz - minZ) / spanZ;
+    let y = ry;
+    if (chordT > 0.58) {
+      const w = (chordT - 0.58) / 0.42;
+      const pull = spanT < 0 ? leftBrake : rightBrake;
+      y -= pull * w * 0.2 * (0.45 + Math.abs(spanT));
+    }
+    if (Math.abs(spanT) > 0.78 && ears > 0) {
+      y -= ears * ((Math.abs(spanT) - 0.78) / 0.22);
+    }
+    y += Math.sin(time * 11 + rx * 2.4 + rz * 3.1) * ripple;
+    y += Math.sin(time * 4.6 + rx * 0.65) * ripple * 0.55;
+    pos.setXYZ(i, rx, y, rz);
+  }
+  pos.needsUpdate = true;
 }
 
 function updateSuspensionLines(visual: GliderVisual, pilot: PilotRig): void {
@@ -1121,10 +1207,10 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
         mat.depthWrite = true;
         mat.side = THREE.DoubleSide;
         mat.forceSinglePass = false;
-        mat.roughness = 0.55;
+        mat.roughness = 0.62;
         mat.metalness = 0;
         mat.metalnessMap = null;
-        mat.envMapIntensity = 0.2;
+        mat.envMapIntensity = 0.22;
         prepMaps(mat, false);
         mat.needsUpdate = true;
       }
@@ -1147,6 +1233,7 @@ export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
       const box = new THREE.Box3().setFromBufferAttribute(attr as THREE.BufferAttribute);
       visual.root.userData.studioSize = box.getSize(new THREE.Vector3());
       visual.root.userData.studioMinZ = box.min.z;
+      paintStudioCanopy(canopyMesh);
     }
   }
 

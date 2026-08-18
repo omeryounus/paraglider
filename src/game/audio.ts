@@ -57,6 +57,10 @@ class SoundEngine {
     if (this.ctx && this.ctx.state === 'suspended') void this.ctx.resume();
   }
 
+  public isReady(): boolean {
+    return !!this.ctx && this.ctx.state === 'running';
+  }
+
   private async loadSamples(): Promise<void> {
     if (!this.ctx) return;
     await Promise.all(
@@ -122,7 +126,7 @@ class SoundEngine {
     this.windRumble.Q.value = 0.5;
 
     this.windGain = this.ctx.createGain();
-    this.windGain.gain.value = 0.01;
+    this.windGain.gain.value = 0.02;
 
     srcA.connect(this.windAir);
     this.windAir.connect(this.windGain);
@@ -186,6 +190,7 @@ class SoundEngine {
   }
 
   public update(speed: number, verticalSpeed: number, isFlying: boolean): void {
+    if (this.ctx?.state === 'suspended') void this.ctx.resume();
     if (!this.ctx || this.silent() || !isFlying) {
       if (this.windGain && this.ctx) this.windGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.12);
       if (this.varioGain && this.ctx) this.varioGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.06);
@@ -194,7 +199,7 @@ class SoundEngine {
     const now = this.ctx.currentTime;
     if (this.windGain && this.windAir && this.windRumble) {
       const speedNorm = Math.max(0, Math.min(1, (speed - 7) / 34));
-      this.windGain.gain.setTargetAtTime(0.04 + speedNorm * 0.22, now, 0.1);
+      this.windGain.gain.setTargetAtTime(0.09 + speedNorm * 0.28, now, 0.1);
       this.windAir.frequency.setTargetAtTime(340 + speedNorm * 720, now, 0.1);
       this.windRumble.frequency.setTargetAtTime(90 + speedNorm * 160, now, 0.12);
     }
@@ -221,7 +226,7 @@ class SoundEngine {
   public playRingSound(type: RingKind): void {
     const key = type === 'gold' ? 'gold' : type === 'boost' ? 'boost' : 'ring';
     const rate = type === 'gold' ? 1.05 : type === 'boost' ? 1.12 : 1;
-    if (this.playBuffer(key, 0.58, rate)) return;
+    if (this.playBuffer(key, 0.7, rate)) return;
     const freq = type === 'gold' ? 784 : type === 'boost' ? 988 : 523;
     this.blip(freq, 0.28, 'triangle', 0.18);
   }
@@ -261,7 +266,7 @@ class SoundEngine {
   public startBed(): void {
     if (!this.ctx || !this.masterGain || this.bedGain) return;
     this.bedGain = this.ctx.createGain();
-    this.bedGain.gain.value = 0.035;
+    this.bedGain.gain.value = 0.055;
     this.bedGain.connect(this.masterGain);
     for (const freq of [196, 247, 294]) {
       const osc = this.ctx.createOscillator();

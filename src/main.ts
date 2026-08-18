@@ -338,6 +338,7 @@ function tickPlay(dt: number): void {
     flight.weightShift = input.state.weightShift;
     flight.flare = input.state.flare;
     flight.speedBar = input.state.speedBar;
+    flight.bigEars = input.state.bigEars;
   }
 
   wind.set(
@@ -398,7 +399,11 @@ function tickPlay(dt: number): void {
   }
 
   // Update audio dynamically with airspeed & variometer climb/sink
-  audio.update(flight.speed, flight.verticalSpeed, session.phase === 'flying');
+  audio.update(
+    flight.speed,
+    flight.verticalSpeed,
+    session.phase === 'flying' || session.phase === 'countdown',
+  );
 
   poseGlider(glider, flight, input.state.steer, clock.elapsedTime, dt);
   const nxt = nextRing(course);
@@ -501,12 +506,14 @@ async function boot(): Promise<void> {
     !paused && (session.phase === 'countdown' || session.phase === 'flying' || session.phase === 'results'),
   );
 
-  // Resume audio context on first user interaction anywhere
+  // Browsers block AudioContext until a gesture; keep trying until it runs.
   const unlockAudio = (): void => {
     audio.init();
     audio.resume();
-    window.removeEventListener('pointerdown', unlockAudio);
-    window.removeEventListener('keydown', unlockAudio);
+    if (audio.isReady()) {
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    }
   };
   window.addEventListener('pointerdown', unlockAudio);
   window.addEventListener('keydown', unlockAudio);

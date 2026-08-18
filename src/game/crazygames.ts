@@ -112,8 +112,10 @@ export function reportCompletion(percent: number): void {
 export function bindMuteListener(onMute: (muted: boolean) => void): void {
   const api = sdk();
   if (!ready || !api?.game) return;
+  // Local SDK often reports muteAudio=true; only honor it on the real portal.
+  if (api.environment !== 'crazygames') return;
   const apply = (settings?: { muteAudio?: boolean }): void => {
-    if (settings?.muteAudio) onMute(true);
+    onMute(!!settings?.muteAudio);
   };
   apply(api.game.settings);
   api.game.addSettingsChangeListener?.(apply);
