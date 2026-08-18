@@ -214,6 +214,9 @@ export function stepPhysics(ctx: PhysicsContext): void {
       position.y = ctx.groundY + LANDING_AGL;
       flight.agl = LANDING_AGL;
       flight.asl = position.y;
+      // Skim — do not pin the wing to the slope.
+      if (flight.verticalSpeed < 0) flight.verticalSpeed *= 0.35;
+      flight.verticalSpeed = Math.max(flight.verticalSpeed, 1.1);
     }
   } else {
     flight.agl = 80;
@@ -243,7 +246,7 @@ export function assistToward(flight: FlightState, from: THREE.Vector3, target: T
   while (delta > Math.PI) delta -= Math.PI * 2;
   while (delta < -Math.PI) delta += Math.PI * 2;
   const dist = from.distanceTo(target);
-  const pull = dist < 160 ? 0.58 : 0.28;
+  const pull = dist < 160 ? 0.22 : 0.1;
   flight.heading += delta * pull * dt;
 }
 

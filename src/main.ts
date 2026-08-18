@@ -16,7 +16,7 @@ import {
   type Course,
 } from './game/course';
 import { createInput } from './game/input';
-import { assistToward, createFlight, grantBoost, isWallFold, stepPhysics, triggerSpeedRing } from './game/physics';
+import { assistToward, createFlight, grantBoost, stepPhysics, triggerSpeedRing } from './game/physics';
 import { createComposer, resizeComposer } from './game/postfx';
 import {
   awardLanding,
@@ -104,7 +104,6 @@ let atmo: Atmosphere | null = null;
 let paused = false;
 let coachElapsed = 0;
 let inThermalLast = false;
-const wallFwd = new THREE.Vector3();
 
 const sampleGround = (origin: THREE.Vector3): number | null => {
   if (!terrain) return null;
@@ -131,15 +130,6 @@ const sampleClearance = (origin: THREE.Vector3, heading: number): number => {
     if (hit) best = Math.min(best, hit.distance);
   }
   return best;
-};
-
-const sampleWall = (origin: THREE.Vector3, heading: number): number => {
-  if (!terrain) return 80;
-  wallFwd.set(Math.sin(heading), -0.04, Math.cos(heading)).normalize();
-  raycaster.set(origin, wallFwd);
-  raycaster.far = 4;
-  const hit = raycaster.intersectObject(terrain.collision, true)[0];
-  return hit ? hit.distance : 80;
 };
 
 function setPaused(value: boolean): void {
@@ -351,13 +341,6 @@ function tickPlay(dt: number): void {
     if (flight.inThermal && !inThermalLast) audio.playThermalSting();
     inThermalLast = flight.inThermal;
 
-    if (isWallFold(flight.agl, sampleWall(pos, flight.heading))) {
-      audio.playLandingSound(false);
-      popups.push(spawnPopup(popupHost, pos.clone(), 'FOLD', '#ff5a4a'));
-      finish('crash');
-      return;
-    }
-
     const event = updateCourse(course, pos, clock.elapsedTime);
     if (event.kind === 'ring' && event.ring) {
       const pts = awardRing(score, event.ring.type);
@@ -380,7 +363,7 @@ function tickPlay(dt: number): void {
       popups.push(spawnPopup(popupHost, pos, `+${pts}`, '#7cf0ff'));
     }
 
-    if (flight.agl <= LANDING_AGL + 0.05) handleLanding();
+    if (flight.agl <= LANDING_AGL + 0.05 && padResult(course, pos)) handleLanding();
   }
 
   // Update audio dynamically with airspeed & variometer climb/sink

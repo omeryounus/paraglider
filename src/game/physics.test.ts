@@ -74,4 +74,23 @@ describe('isWallFold', () => {
     expect(isWallFold(18, 6)).toBe(false);
     expect(isWallFold(1.55, 0.4)).toBe(false);
   });
+
+  it('skims terrain instead of locking sink when AGL bottoms out', () => {
+    const flight = createFlight();
+    flight.verticalSpeed = -4;
+    const ctx: PhysicsContext = {
+      flight,
+      position: new THREE.Vector3(0, 10, 0),
+      input: idle(),
+      dt: 1 / 60,
+      groundY: 9,
+      clearance: 80,
+      inThermal: false,
+      inDowndraft: false,
+      wind: new THREE.Vector3(),
+    };
+    stepPhysics(ctx);
+    expect(flight.agl).toBeGreaterThanOrEqual(1.55);
+    expect(flight.verticalSpeed).toBeGreaterThan(0);
+  });
 });
