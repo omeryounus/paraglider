@@ -34,14 +34,36 @@ function multiplyEuler(bone: THREE.Bone | undefined, x: number, y: number, z: nu
   bone.quaternion.multiply(_quat);
 }
 
+function hardenPilotMaterial(src: THREE.Material): THREE.MeshStandardMaterial {
+  const mapped = src as THREE.MeshStandardMaterial;
+  const existingMap = 'map' in src ? mapped.map : null;
+  const suit = mapped.isMeshStandardMaterial
+    ? mapped.clone()
+    : new THREE.MeshStandardMaterial({
+        map: existingMap ?? null,
+        color: 0xffffff,
+      });
+  suit.color.set(0xffffff);
+  suit.metalness = 0;
+  suit.roughness = 0.72;
+  suit.fog = true;
+  suit.envMapIntensity = 0.18;
+  suit.transparent = false;
+  suit.opacity = 1;
+  suit.depthWrite = true;
+  suit.depthTest = true;
+  suit.side = THREE.FrontSide;
+  suit.alphaTest = 0;
+  if (suit.map) {
+    suit.map.colorSpace = THREE.SRGBColorSpace;
+    suit.map.anisotropy = 8;
+    suit.map.needsUpdate = true;
+  }
+  suit.needsUpdate = true;
+  return suit;
+}
+
 function paintPilot(root: THREE.Object3D): void {
-  const suit = new THREE.MeshStandardMaterial({
-    color: 0x1a1f24,
-    roughness: 0.78,
-    metalness: 0,
-    fog: true,
-    envMapIntensity: 0.14,
-  });
   root.traverse((child) => {
     const mesh = child as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -49,7 +71,9 @@ function paintPilot(root: THREE.Object3D): void {
     mesh.castShadow = false;
     mesh.receiveShadow = false;
     mesh.renderOrder = 2;
-    mesh.material = suit;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const hardened = mats.map((m) => hardenPilotMaterial(m));
+    mesh.material = hardened.length === 1 ? hardened[0] : hardened;
   });
 }
 
