@@ -18,6 +18,8 @@
   padding: 0;
   user-select: none;
   -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 html, body, #app {
@@ -26,6 +28,10 @@ html, body, #app {
   height: 100%;
   overflow: hidden;
   background: #06090e;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   touch-action: none;

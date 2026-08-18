@@ -1,11 +1,12 @@
 import { STORAGE_KEY } from '../config/constants';
 import type { LevelId, Phase, Progress, ResultKind } from './types';
 import { LEVELS } from '../config/levels';
+import { storageGet, storageSet } from './crazygames';
 
 export function loadProgress(): Progress {
   const blank = emptyProgress();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = storageGet(STORAGE_KEY);
     if (!raw) return blank;
     const parsed = JSON.parse(raw) as Progress;
     return {
@@ -18,7 +19,7 @@ export function loadProgress(): Progress {
 }
 
 export function saveProgress(progress: Progress): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+  storageSet(STORAGE_KEY, JSON.stringify(progress));
 }
 
 export function emptyProgress(): Progress {

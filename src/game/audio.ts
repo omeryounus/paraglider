@@ -28,6 +28,7 @@ class SoundEngine {
   private varioNextBeep = 0;
   private varioEnabled = true;
   private muted = false;
+  private platformMute = false;
   private volume = 0.72;
   private bedGain: GainNode | null = null;
   private bedOsc: OscillatorNode[] = [];
@@ -42,7 +43,7 @@ class SoundEngine {
       this.masterGain = this.ctx.createGain();
       const stored = Number(localStorage.getItem('aero-glide-volume'));
       this.volume = Number.isFinite(stored) ? Math.max(0, Math.min(1, stored)) : 0.72;
-      this.masterGain.gain.setValueAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime);
+      this.masterGain.gain.setValueAtTime(this.silent() ? 0 : this.volume, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
       this.setupWind();
       this.setupVario();
@@ -149,8 +150,12 @@ class SoundEngine {
     this.varioOsc.start();
   }
 
+  private silent(): boolean {
+    return this.muted || this.platformMute;
+  }
+
   private playBuffer(name: string, volume = 0.55, rate = 1): boolean {
-    if (!this.ctx || !this.masterGain || this.muted) return false;
+    if (!this.ctx || !this.masterGain || this.silent()) return false;
     const buf = this.samples.get(name);
     if (!buf) return false;
     const src = this.ctx.createBufferSource();
@@ -165,7 +170,7 @@ class SoundEngine {
   }
 
   private blip(freq: number, dur: number, type: OscillatorType, vol: number): void {
-    if (!this.ctx || !this.masterGain || this.muted) return;
+    if (!this.ctx || !this.masterGain || this.silent()) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -181,7 +186,7 @@ class SoundEngine {
   }
 
   public update(speed: number, verticalSpeed: number, isFlying: boolean): void {
-    if (!this.ctx || this.muted || !isFlying) {
+    if (!this.ctx || this.silent() || !isFlying) {
       if (this.windGain && this.ctx) this.windGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.12);
       if (this.varioGain && this.ctx) this.varioGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.06);
       return;
@@ -245,7 +250,7 @@ class SoundEngine {
     this.volume = Math.max(0, Math.min(1, value));
     localStorage.setItem('aero-glide-volume', String(this.volume));
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.04);
+      this.masterGain.gain.setTargetAtTime(this.silent() ? 0 : this.volume, this.ctx.currentTime, 0.04);
     }
   }
 
@@ -290,12 +295,20 @@ class SoundEngine {
     this.blip(523, 0.35, 'sine', 0.08);
   }
 
+  public setPlatformMute(muted: boolean): void {
+    this.platformMute = muted;
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setTargetAtTime(this.silent() ? 0 : this.volume, this.ctx.currentTime, 0.04);
+    }
+  }
+
   public toggleMute(): boolean {
+    if (this.platformMute) return true;
     this.muted = !this.muted;
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.04);
+      this.masterGain.gain.setTargetAtTime(this.silent() ? 0 : this.volume, this.ctx.currentTime, 0.04);
     }
-    return this.muted;
+    return this.muted || this.platformMute;
   }
 
   public toggleVario(): boolean {

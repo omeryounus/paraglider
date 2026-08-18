@@ -28,6 +28,17 @@ import {
   starCount,
   tickCombo,
 } from './game/scoring';
+import {
+  bindMuteListener,
+  clearGameContext,
+  gameplayStart,
+  gameplayStop,
+  happyTime,
+  initCrazyGames,
+  loadingStop,
+  reportCompletion,
+  setGameContext,
+} from './game/crazygames';
 import { isUnlocked, loadProgress, newSession, nextUnlocked, recordResult, type Session } from './game/state';
 import { loadTerrain, purgeTerrainFromScene, type TerrainWorld } from './game/terrain';
 import { updateWater } from './game/water';
@@ -137,7 +148,12 @@ function setPaused(value: boolean): void {
   paused = value;
   pauseEl.hidden = !value;
   renderer.domElement.style.pointerEvents = value ? 'none' : '';
-  if (value) audio.update(0, 0, false);
+  if (value) {
+    audio.update(0, 0, false);
+    gameplayStop();
+  } else if (session.phase === 'countdown' || session.phase === 'flying') {
+    gameplayStart();
+  }
 }
 
 function togglePause(): void {
@@ -223,6 +239,8 @@ async function startLevel(id: LevelId): Promise<void> {
   setTerrainSource(hud, terrain.fromStudio, level.asset);
   setLoader(menus, 'Ready', true);
   setHudVisible(hud, true);
+  setGameContext({ biome: level.id, course: level.name });
+  gameplayStart();
 }
 
 function openMenu(): void {
@@ -232,6 +250,8 @@ function openMenu(): void {
   renderer.domElement.style.pointerEvents = '';
   hideCoach();
   audio.stopBed();
+  gameplayStop();
+  clearGameContext();
   setHudVisible(hud, false);
   hideResults(menus);
   renderLevelSelect(menus, progress, (id) => void startLevel(id));
@@ -247,8 +267,13 @@ function finish(kind: 'clear' | 'crash' | 'timeout'): void {
   renderer.domElement.style.pointerEvents = '';
   hideCoach();
   audio.stopBed();
+  gameplayStop();
+  clearGameContext();
   const stars = starCount(score.total, level.starScores, kind === 'clear');
   progress = recordResult(progress, level.id, stars, Math.floor(score.total));
+  const earned = Object.values(progress.stars).reduce((sum, n) => sum + n, 0);
+  reportCompletion((earned / 12) * 100);
+  if (kind === 'clear' && stars >= 3) happyTime();
   const nextId = nextUnlocked(progress, level.id);
   const nextOpen = nextId !== level.id;
   showResults(
@@ -452,7 +477,15 @@ function bindPauseUi(): void {
   }
 }
 
-function boot(): void {
+async function boot(): Promise<void> {
+  await initCrazyGames();
+  progress = loadProgress();
+  bindMuteListener((muted) => {
+    audio.setPlatformMute(muted);
+    const btn = document.querySelector<HTMLButtonElement>('#btn-audio-mute');
+    if (btn && muted) btn.textContent = '🔇';
+  });
+
   input.bind();
   bindTouch(input.setTouch, input.toggleFpv, input.toggleGyro);
   bindCamRig();
@@ -504,8 +537,8 @@ function boot(): void {
   showSelect(menus, true);
   setLoader(menus, 'Choose a canyon', true);
   session.phase = 'menu';
-  void attachStudioAssets(glider);
+  void attachStudioAssets(glider).then(() => loadingStop());
   frame();
 }
 
-boot();
+void boot();
