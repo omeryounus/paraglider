@@ -34,8 +34,8 @@ export function createSurvival(): SurvivalState {
   return {
     fabric: 0,
     cord: 0,
-    integrity: 72,
-    warmth: 82,
+    integrity: 100,
+    warmth: 88,
     storm: 0,
     binds: 0,
     patches: 0,
@@ -62,7 +62,7 @@ export function craft(state: SurvivalState, id: CraftId): boolean {
   state.fabric -= recipe.fabric;
   state.cord -= recipe.cord;
   if (id === 'patch') {
-    state.integrity = Math.min(100, state.integrity + 30);
+    state.integrity = Math.min(100, state.integrity + 40);
     state.patches += 1;
   } else if (id === 'bind') {
     state.binds += 1;
@@ -77,7 +77,6 @@ export interface SurvivalTick {
   inThermal: boolean;
   inDowndraft: boolean;
   stall: boolean;
-  nearMiss: boolean;
   parTime: number;
   timeLeft: number;
 }
@@ -85,6 +84,9 @@ export interface SurvivalTick {
 /**
  * Gather / craft / survive: warmth and canopy drain as the storm ramps.
  * Returns a fail kind when the session is over.
+ *
+ * First ~20s are a gather window. A clean line without a Patch still
+ * shreds in the late storm; stall and shear nibble, they do not insta-kill.
  */
 export function tickSurvival(state: SurvivalState, dt: number, opts: SurvivalTick): ResultKind | null {
   if (state.fail) return state.fail;
@@ -94,14 +96,14 @@ export function tickSurvival(state: SurvivalState, dt: number, opts: SurvivalTic
   if (opts.inThermal) {
     state.warmth = Math.min(100, state.warmth + 16 * dt);
   } else {
-    state.warmth -= (1.05 + state.storm * 2.6) * dt;
+    state.warmth -= (0.55 + state.storm * 1.6) * dt;
   }
 
-  const tear = (0.55 + state.storm * 5.1) / (1 + state.binds * 0.72);
+  const pressure = Math.max(0, (state.storm - 0.12) / 0.88);
+  const tear = (0.16 + pressure ** 1.08 * 3.6) / (1 + state.binds * 0.72);
   state.integrity -= tear * dt;
-  if (opts.stall) state.integrity -= 5.5 * dt;
-  if (opts.inDowndraft) state.integrity -= 4.2 * dt;
-  if (opts.nearMiss) state.integrity -= 2.8 * dt;
+  if (opts.stall) state.integrity -= 1.1 * dt;
+  if (opts.inDowndraft) state.integrity -= 0.85 * dt;
 
   if (state.warmth <= 0) {
     state.warmth = 0;

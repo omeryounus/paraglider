@@ -6,7 +6,6 @@ function fly(partial: Partial<Parameters<typeof tickSurvival>[2]> = {}) {
     inThermal: false,
     inDowndraft: false,
     stall: false,
-    nearMiss: false,
     parTime: 90,
     timeLeft: 80,
     ...partial,
@@ -22,10 +21,11 @@ describe('survival gather / craft / threat', () => {
     gatherSalvage(state, 'cord');
     gatherSalvage(state, 'cord');
     expect(state.gathered).toBe(4);
+    state.integrity = 45;
     expect(craft(state, 'patch')).toBe(true);
     expect(state.fabric).toBe(0);
     expect(state.patches).toBe(1);
-    expect(state.integrity).toBeGreaterThan(72);
+    expect(state.integrity).toBe(85);
     expect(craft(state, 'bind')).toBe(true);
     expect(state.cord).toBe(0);
     expect(state.binds).toBe(1);
@@ -51,7 +51,21 @@ describe('survival gather / craft / threat', () => {
     const heat = createSurvival();
     tickSurvival(heat, 8, fly({ inThermal: true, timeLeft: 80 }));
     expect(heat.warmth).toBeGreaterThan(cold.warmth);
-    expect(cold.warmth).toBeLessThan(82);
+    expect(cold.warmth).toBeLessThan(88);
+  });
+
+  it('keeps most of the canopy through the first twenty seconds of clean air', () => {
+    const state = createSurvival();
+    tickSurvival(state, 20, fly({ timeLeft: 70 }));
+    expect(state.fail).toBeNull();
+    expect(state.integrity).toBeGreaterThan(85);
+  });
+
+  it('does not shred from a few seconds of stall', () => {
+    const state = createSurvival();
+    tickSurvival(state, 8, fly({ stall: true, timeLeft: 82 }));
+    expect(state.fail).toBeNull();
+    expect(state.integrity).toBeGreaterThan(75);
   });
 
   it('tears the canopy faster as the storm ramps, and binds slow that tear', () => {
@@ -73,7 +87,7 @@ describe('survival gather / craft / threat', () => {
     expect(tickSurvival(ice, 1, fly())).toBe('freeze');
 
     const tear = createSurvival();
-    tear.integrity = 0.2;
+    tear.integrity = 0.05;
     expect(tickSurvival(tear, 1, fly())).toBe('shred');
 
     const gale = createSurvival();

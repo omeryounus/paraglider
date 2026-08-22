@@ -564,7 +564,6 @@ function tickPlay(dt: number): void {
         inThermal: flight.inThermal,
         inDowndraft: flight.inDowndraft,
         stall: flight.stall,
-        nearMiss: flight.nearMiss,
         parTime: level.parTime,
         timeLeft: session.timeLeft,
       });
