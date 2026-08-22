@@ -53,7 +53,7 @@ export function buildCourse(level: LevelDef, terrain: TerrainWorld, scene: THREE
 
   const orbs = level.orbs.map((spec) => {
     const pos = place(level, terrain, spec.t, spec.lateral, spec.height ?? 18);
-    const orb = createOrb(pos);
+    const orb = createOrb(pos, spec.kind ?? 'energy');
     group.add(orb.mesh);
     return orb;
   });
@@ -157,7 +157,12 @@ export function updateCourse(
     if (orb.collected) continue;
     if (pos.distanceTo(orb.position) < 3.2) {
       orb.collected = true;
-      event = { kind: 'orb', orb, popup: '+200', color: '#7cf0ff' };
+      event = {
+        kind: 'orb',
+        orb,
+        popup: orb.kind === 'fabric' ? 'FABRIC +1' : orb.kind === 'cord' ? 'CORD +1' : '+200',
+        color: orb.kind === 'fabric' ? '#ffb732' : '#7cf0ff',
+      };
       break;
     }
   }

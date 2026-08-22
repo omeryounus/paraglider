@@ -2,7 +2,8 @@ export type LevelId = 'alpine' | 'coastal' | 'dune' | 'ridge';
 export type RingKind = 'green' | 'gold' | 'boost';
 export type Phase = 'boot' | 'menu' | 'load' | 'attract' | 'launch' | 'countdown' | 'flying' | 'results';
 export type Sport = 'teach' | 'skim' | 'thermal' | 'ridge';
-export type ResultKind = 'clear' | 'crash' | 'timeout';
+export type ResultKind = 'clear' | 'crash' | 'timeout' | 'freeze' | 'shred' | 'storm';
+export type SalvageKind = 'fabric' | 'cord' | 'energy';
 
 export interface RingSpec {
   t: number;
@@ -17,6 +18,7 @@ export interface ZoneSpec {
   lateral: number;
   radius: number;
   height?: number;
+  kind?: SalvageKind;
 }
 
 export interface AtmosphereConfig {

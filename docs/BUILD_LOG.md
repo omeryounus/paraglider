@@ -1,6 +1,8 @@
-# Build Log: Aero Glide — Canyon Rush
+# Build Log
 
-This running log records design decisions, technical architecture, and prompt engineering sessions used to develop the *Aero Glide* prototype for the **Meta Horizon Creator Competition: Game Prototype**.
+Official contest file: `docs/devpost/buildlog.md` (upload as `buildlog.md`).
+
+The notes below are outdated. Do not submit this file.
 
 ---
 

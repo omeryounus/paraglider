@@ -23,10 +23,10 @@
       </div>
 
       <section id="title-card" hidden>
-        <p class="banner-kicker">Aero Glide</p>
+        <p class="banner-kicker">Survival · Resource Management</p>
         <h1>Canyon Rush</h1>
-        <p class="title-cta">Click or tap to fly</p>
-        <p class="banner-hint">A / D steers the wing</p>
+        <p class="title-cta">Tap to fly the ridge</p>
+        <p class="banner-hint">Gather scrap. Patch the wing. Beat the storm.</p>
       </section>
 
       <section id="level-select" hidden>
@@ -59,8 +59,23 @@
           </div>
           <div class="combo-block" id="hud-combo">1×</div>
           <div class="time-block">
-            <span class="dial-label">Time</span>
+            <span class="dial-label label-time">Time</span>
+            <span class="dial-label label-storm">Storm</span>
             <strong id="hud-time">0:00.0</strong>
+          </div>
+        </div>
+        <div class="survive-meters">
+          <div class="meter">
+            <span class="dial-label">Canopy</span>
+            <div class="meter-track"><div id="hud-integrity"></div></div>
+          </div>
+          <div class="meter">
+            <span class="dial-label">Warmth</span>
+            <div class="meter-track warmth"><div id="hud-warmth"></div></div>
+          </div>
+          <div class="meter">
+            <span class="dial-label">Front</span>
+            <div class="meter-track storm"><div id="hud-storm"></div></div>
           </div>
         </div>
         <div class="boost-wrap">
@@ -108,6 +123,20 @@
       </div>
 
       <!-- Mobile Touch Controls: Dual Thumb Brake Sliders & Action Buttons -->
+      <div id="craft-drawer" hidden>
+        <div class="craft-inv">
+          <span>Fabric <b id="inv-fabric">0</b></span>
+          <span>Cord <b id="inv-cord">0</b></span>
+        </div>
+        <div class="craft-actions">
+          <button type="button" id="craft-patch">Patch <small>2 fabric</small></button>
+          <button type="button" id="craft-bind">Bind <small>2 cord</small></button>
+          <button type="button" id="craft-wrap">Heat wrap <small>1 + 1</small></button>
+        </div>
+      </div>
+
+      <div id="rotate-hint">Turn the phone upright to fly</div>
+
       <div id="touch" class="touch-layer">
         <!-- Left Brake Slider (Left Thumb) -->
         <div id="touch-brake-left" class="brake-slider">

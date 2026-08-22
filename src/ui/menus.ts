@@ -1,3 +1,4 @@
+import { CONTEST } from '../config/contest';
 import { LEVELS } from '../config/levels';
 import { utcDayKey } from '../game/daily';
 import { formatTime } from '../game/math';
@@ -33,7 +34,8 @@ export function renderLevelSelect(
   onPick: (id: LevelId) => void,
 ): void {
   menus.grid.replaceChildren();
-  for (const level of LEVELS) {
+  const catalog = CONTEST ? LEVELS.filter((level) => level.id === 'alpine') : LEVELS;
+  for (const level of catalog) {
     const stars = progress.stars[level.id] ?? 0;
     const best = progress.best[level.id] ?? 0;
     const unlocked = isUnlocked(progress, level.id);
@@ -72,11 +74,20 @@ export function showResults(
 ): void {
   const cleared = kind === 'clear';
   const stars = starCount(score.total, thresholds, cleared);
+  const titles: Record<ResultKind, [string, string]> = {
+    clear: ['Valley reached', 'You outran the storm'],
+    crash: ['Wing folded', 'Crash'],
+    timeout: ['Time expired', 'DNF'],
+    freeze: ['Hypothermia', 'The cold took the ridge'],
+    shred: ['Canopy shredded', 'The wing tore apart'],
+    storm: ['Whiteout', 'The storm swallowed the LZ'],
+  };
+  const [kicker, headline] = titles[kind] ?? titles.crash;
   menus.results.hidden = false;
   menus.resultsCard.className = `modal-card ${kind}`;
   menus.resultsCard.innerHTML = `
-    <p class="modal-kicker">${kind === 'clear' ? 'Course complete' : kind === 'timeout' ? 'Time expired' : 'Wing folded'}</p>
-    <h2>${kind === 'clear' ? 'Level Clear' : kind === 'timeout' ? 'DNF' : 'Crash'}</h2>
+    <p class="modal-kicker">${kicker}</p>
+    <h2>${headline}</h2>
     <div class="star-row">${[1, 2, 3].map((n) => `<span class="${n <= stars ? 'on' : ''}">★</span>`).join('')}</div>
     <p class="result-score">${Math.floor(score.total).toLocaleString()}</p>
     <dl class="modal-stats">

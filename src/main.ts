@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CONTEST } from './config/contest';
 import { CRASH_SINK, LANDING_AGL, MISS_TIME_PENALTY, NEAR_MISS_MAX } from './config/constants';
 import { getLevel, LEVELS } from './config/levels';
 import { audio } from './game/audio';
@@ -22,6 +23,7 @@ import { createInput } from './game/input';
 import { assistToward, createFlight, grantBoost, stepPhysics, triggerSpeedRing } from './game/physics';
 import { createComposer, resizeComposer } from './game/postfx';
 import {
+  awardCraft,
   awardLanding,
   awardNearMiss,
   awardOrb,
@@ -31,6 +33,16 @@ import {
   starCount,
   tickCombo,
 } from './game/scoring';
+import {
+  craft,
+  createSurvival,
+  gatherSalvage,
+  stormFogBoost,
+  stormGustScale,
+  tickSurvival,
+  type CraftId,
+  type SurvivalState,
+} from './game/survival';
 import {
   bindMuteListener,
   clearGameContext,
@@ -46,12 +58,23 @@ import {
 import { isUnlocked, loadProgress, nextUnlocked, recordResult, type Session } from './game/state';
 import { loadTerrain, purgeTerrainFromScene, type TerrainWorld } from './game/terrain';
 import { updateWater } from './game/water';
-import type { FlightState, GhostSample, LevelDef, LevelId, Progress, ScoreState } from './game/types';
+import type { FlightState, GhostSample, LevelDef, LevelId, Progress, ResultKind, ScoreState } from './game/types';
 import { attachStudioAssets, createGlider, playPilotDying, poseGlider, setCanopyDeploy, setPilotGait } from './entities/glider';
 import { createGhostVisual, stepGhost, type GhostVisual } from './entities/ghostGlider';
 import { createThermalDust, spawnPopup, updatePopups, updateThermalDust, type Popup } from './entities/effects';
 import { paintWaypointHud } from './entities/waypointArrow';
-import { bindHud, fillBiomeSelect, paintHud, setHudLesson, setHudVisible, setTerrainSource, type HudLesson } from './ui/hud';
+import {
+  bindHud,
+  fillBiomeSelect,
+  paintHud,
+  paintSurvive,
+  setHasScrap,
+  setHudLesson,
+  setHudVisible,
+  setSurviveMode,
+  setTerrainSource,
+  type HudLesson,
+} from './ui/hud';
 import {
   bindMenus,
   hideResults,
@@ -103,9 +126,9 @@ const coachEl = document.querySelector<HTMLElement>('#coach')!;
 const volSlider = document.querySelector<HTMLInputElement>('#vol-slider');
 
 const ALPINE_COACH: Array<{ until: number; text: string }> = [
-  { until: 18, text: 'A / D or drag left / right. That is the whole game for now.' },
-  { until: 36, text: 'Blue air is lift. Drift through it.' },
-  { until: 90, text: 'Near the pad: hold Space or FLARE.' },
+  { until: 16, text: 'Gold packs are fabric. Teal packs are cord. Grab both.' },
+  { until: 36, text: 'Blue air is heat. Patch the canopy before it shreds.' },
+  { until: 90, text: 'Craft with 1 / 2 / 3, then flare the valley pad.' },
 ];
 
 let progress: Progress = loadProgress();
@@ -124,6 +147,7 @@ let ghost: GhostVisual | null = null;
 let ghostSamples: GhostSample[] = [];
 let flyClock = 0;
 let lesson: HudLesson = 'full';
+let survival: SurvivalState | null = null;
 const visorEl = document.querySelector<HTMLElement>('#visor');
 const titleEl = document.querySelector<HTMLElement>('#title-card');
 
@@ -206,7 +230,7 @@ function syncLesson(): void {
   }
   const nxt = course ? nextRing(course) : null;
   if (!nxt) lesson = 'flare';
-  else if (flyClock > 20 || (score.ringsHit > 0 && flyClock > 8)) lesson = 'open';
+  else if (flyClock > 16 || score.ringsHit > 0 || (survival && survival.gathered > 0)) lesson = 'open';
   else lesson = 'steer';
   setHudLesson(lesson);
 }
@@ -295,6 +319,9 @@ async function startLevel(id: LevelId, attract = false): Promise<void> {
   course = buildCourse(level, terrain, scene);
   flight = createFlight();
   score = emptyScore();
+  survival = level.id === 'alpine' ? createSurvival() : null;
+  setSurviveMode(Boolean(survival));
+  setHasScrap(false);
   ghostSamples = [];
   flyClock = 0;
   launch = null;
@@ -367,16 +394,25 @@ function openMenu(): void {
   showSelect(menus, true);
 }
 
-function finish(kind: 'clear' | 'crash' | 'timeout'): void {
+function tryCraft(id: CraftId): void {
+  if (!survival || paused || session.phase !== 'flying') return;
+  if (!craft(survival, id)) return;
+  const pts = awardCraft(score);
+  audio.playOrbSound();
+  popups.push(spawnPopup(popupHost, glider.root.position.clone(), `CRAFT +${pts}`, '#ffc14a'));
+}
+
+function finish(kind: ResultKind): void {
   if (session.phase !== 'flying' && session.phase !== 'countdown' && session.phase !== 'launch') return;
   session.phase = 'results';
   session.result = kind;
+  setHasScrap(false);
   paused = false;
   pauseEl.hidden = true;
   renderer.domElement.style.pointerEvents = '';
   hideCoach();
   audio.stopBed();
-  if (kind === 'crash') playPilotDying(glider);
+  if (kind === 'crash' || kind === 'freeze' || kind === 'shred' || kind === 'storm') playPilotDying(glider);
   gameplayStop();
   clearGameContext();
   const stars = starCount(score.total, level.starScores, kind === 'clear');
@@ -389,9 +425,12 @@ function finish(kind: 'clear' | 'crash' | 'timeout'): void {
   reportCompletion((earned / 12) * 100);
   if (kind === 'clear' && stars >= 3) happyTime();
   const nextId = nextUnlocked(progress, level.id);
-  const nextOpen = nextId !== level.id;
+  const nextOpen = !CONTEST && nextId !== level.id;
   const ghostNote = kind === 'clear' && total >= prevBest ? 'Ghost saved — beat the cyan wing next run.' : '';
   const board = `Daily ${utcDayKey()} · best ${Math.max(prevBest, total).toLocaleString()}`;
+  const surviveNote = survival
+    ? `Canopy ${Math.max(0, survival.integrity).toFixed(0)} · Warmth ${Math.max(0, survival.warmth).toFixed(0)} · Patch ${survival.patches} · Bind ${survival.binds}`
+    : '';
   showResults(
     menus,
     kind,
@@ -402,7 +441,7 @@ function finish(kind: 'clear' | 'crash' | 'timeout'): void {
     () => void startLevel(nextId),
     openMenu,
     nextOpen,
-    [board, ghostNote].filter(Boolean).join(' · '),
+    [board, surviveNote, ghostNote].filter(Boolean).join(' · '),
   );
 }
 
@@ -480,15 +519,16 @@ function tickPlay(dt: number): void {
     flight.bigEars = gated.bigEars;
   }
 
+  const gust = survival ? stormGustScale(survival) : 1;
   wind.set(
-    Math.sin(clock.elapsedTime * 0.35) * level.gustStrength,
+    Math.sin(clock.elapsedTime * 0.35) * level.gustStrength * gust,
     0,
-    Math.cos(clock.elapsedTime * 0.21) * level.gustStrength * 0.45,
+    Math.cos(clock.elapsedTime * 0.21) * level.gustStrength * 0.45 * gust,
   );
 
   if (session.phase === 'flying') {
     session.timeLeft -= dt;
-    if (session.timeLeft <= 0) {
+    if (!survival && session.timeLeft <= 0) {
       finish('timeout');
       return;
     }
@@ -519,6 +559,24 @@ function tickPlay(dt: number): void {
     if (flight.inThermal && !inThermalLast) audio.playThermalSting();
     inThermalLast = flight.inThermal;
 
+    if (survival) {
+      const fail = tickSurvival(survival, dt, {
+        inThermal: flight.inThermal,
+        inDowndraft: flight.inDowndraft,
+        stall: flight.stall,
+        nearMiss: flight.nearMiss,
+        parTime: level.parTime,
+        timeLeft: session.timeLeft,
+      });
+      if (scene.fog instanceof THREE.FogExp2) {
+        scene.fog.density = Math.min(0.0025, level.fog + stormFogBoost(survival));
+      }
+      if (fail) {
+        finish(fail);
+        return;
+      }
+    }
+
     const event = updateCourse(course, pos, clock.elapsedTime);
     if (event.kind === 'ring' && event.ring) {
       const pts = awardRing(score, event.ring.type);
@@ -536,9 +594,14 @@ function tickPlay(dt: number): void {
       popups.push(spawnPopup(popupHost, pos, 'MISS −2s', '#ff5a4a'));
     } else if (event.kind === 'orb') {
       const pts = awardOrb(score);
-      grantBoost(flight, 18);
+      if (survival && event.orb && (event.orb.kind === 'fabric' || event.orb.kind === 'cord')) {
+        gatherSalvage(survival, event.orb.kind);
+        setHasScrap(true);
+      } else {
+        grantBoost(flight, 18);
+      }
       audio.playOrbSound();
-      popups.push(spawnPopup(popupHost, pos, `+${pts}`, '#7cf0ff'));
+      popups.push(spawnPopup(popupHost, pos, event.popup ?? `+${pts}`, event.color ?? '#7cf0ff'));
     }
 
     if (level.waterCrash && level.water && pos.y < level.waterLevel + 1.35 && !padResult(course, pos)) {
@@ -576,14 +639,19 @@ function tickPlay(dt: number): void {
         ? 'W sprints the ridge — the wing opens when you step off'
         : flight.stall
           ? 'STALL — ease both brakes to recover'
-          : lesson === 'steer'
-            ? 'A / D banks the wing'
-            : lesson === 'flare' || !nxt
-              ? 'Hold Space or FLARE onto the pad'
-              : nxt
-                ? `Next ring · ${pos.distanceTo(nxt.position).toFixed(0)} m`
-                : 'Flare and land on the bullseye';
+          : survival && survival.integrity < 28
+            ? 'Canopy tearing — craft Patch (1) with 2 fabric'
+            : survival && survival.warmth < 28
+              ? 'Freezing — ride blue lift or craft a heat wrap (3)'
+              : lesson === 'steer'
+                ? 'A / D banks the wing. Grab gold fabric and teal cord.'
+                : lesson === 'flare' || !nxt
+                  ? 'Hold Space or FLARE onto the pad'
+                  : nxt
+                    ? `Next ring · ${pos.distanceTo(nxt.position).toFixed(0)} m`
+                    : 'Flare and land on the bullseye';
   paintHud(hud, score, flight, session.timeLeft, score.ringsHit, course.rings.length, hint);
+  paintSurvive(survival, session.timeLeft);
   if (visorEl) visorEl.hidden = !input.state.fpv;
   updatePopups(popups, camera, window.innerWidth, window.innerHeight, dt);
 }
@@ -673,6 +741,9 @@ async function boot(): Promise<void> {
   bindCamRig();
   bindAudioToggle();
   bindPauseUi();
+  document.getElementById('craft-patch')?.addEventListener('click', () => tryCraft('patch'));
+  document.getElementById('craft-bind')?.addEventListener('click', () => tryCraft('bind'));
+  document.getElementById('craft-wrap')?.addEventListener('click', () => tryCraft('wrap'));
   bindLookControls(renderer.domElement, () =>
     !paused &&
       (session.phase === 'countdown' ||
@@ -719,6 +790,9 @@ async function boot(): Promise<void> {
     if (key === 'r' && (session.phase === 'flying' || session.phase === 'results' || session.phase === 'launch')) {
       void startLevel(level.id);
     }
+    if (key === '1') tryCraft('patch');
+    if (key === '2') tryCraft('bind');
+    if (key === '3') tryCraft('wrap');
     if (key === 'm' && !event.repeat) {
       const isMuted = audio.toggleMute();
       const btn = document.querySelector<HTMLButtonElement>('#btn-audio-mute');

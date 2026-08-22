@@ -114,6 +114,97 @@ canvas {
   font-weight: 700;
   letter-spacing: 0.04em;
 }
+.label-storm { display: none; }
+#app.survive .label-time { display: none; }
+#app.survive .label-storm { display: block; }
+.survive-meters { display: none; }
+#app.survive .survive-meters {
+  display: grid;
+  gap: 0.28rem;
+  margin: 0.45rem 0 0.2rem;
+}
+#app.survive .score-block,
+#app.survive .combo-block,
+#app.survive .boost-wrap { display: none; }
+.meter-track {
+  height: 7px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+#hud-integrity, #hud-warmth, #hud-storm {
+  height: 100%;
+  width: 70%;
+  border-radius: 99px;
+}
+#hud-integrity { background: linear-gradient(90deg, #d9c27a, #f0e2b2); }
+#hud-warmth { background: linear-gradient(90deg, #ff7a3c, #ffd36a); }
+#hud-storm { background: linear-gradient(90deg, #4b6d8c, #dfe7ef); }
+#hud-integrity.low, #hud-warmth.low {
+  background: linear-gradient(90deg, #ff473a, #ff8a3c);
+}
+#craft-drawer {
+  display: none;
+  position: absolute;
+  left: 50%;
+  bottom: 1.1rem;
+  transform: translateX(-50%);
+  z-index: 16;
+  width: min(420px, calc(100vw - 1.4rem));
+  padding: 0.45rem 0.55rem 0.5rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  pointer-events: auto;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+#app.survive.has-scrap #craft-drawer { display: flex; }
+#craft-drawer[hidden] { display: none !important; }
+.craft-inv {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.craft-inv b { color: var(--ink); font-size: 0.9rem; }
+.craft-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.35rem; }
+.craft-actions button {
+  appearance: none;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  padding: 0.4rem 0.25rem;
+  font-weight: 700;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.craft-actions button small { display: block; color: var(--muted); font-weight: 600; font-size: 0.58rem; }
+.craft-actions button:disabled { opacity: 0.38; cursor: default; }
+#rotate-hint {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  place-items: center;
+  text-align: center;
+  padding: 2rem;
+  background: #06090e;
+  color: var(--ink);
+  font-weight: 700;
+}
+@media (max-width: 899px) and (orientation: landscape) and (max-height: 480px) {
+  #rotate-hint { display: grid; }
+}
+#app.contest .biome-select,
+#app.contest #hud-source { display: none !important; }
+
 #app.lesson-steer .boost-wrap,
 #app.lesson-steer .hud-row,
 #app.lesson-steer .hud-row.instruments,
@@ -758,6 +849,19 @@ kbd {
     bottom: calc(5.15rem + env(safe-area-inset-bottom));
     padding: 0.2rem 0.5rem;
     font-size: 0.64rem;
+  }
+  #app.survive.has-scrap #hud-hint {
+    bottom: calc(10.4rem + env(safe-area-inset-bottom));
+  }
+  #app.survive.has-scrap #coach {
+    bottom: calc(12.3rem + env(safe-area-inset-bottom));
+  }
+  #app.survive.has-scrap #hud-chip {
+    bottom: calc(8.9rem + env(safe-area-inset-bottom));
+  }
+  #craft-drawer {
+    bottom: calc(6.4rem + env(safe-area-inset-bottom));
+    width: min(360px, calc(100vw - 7.4rem));
   }
 
   #cam-rig { display: none; }

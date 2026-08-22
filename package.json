@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "preview": "vite preview",
+    "pack:devpost": "bash scripts/pack-devpost.sh",
     "export:terrains": "node scripts/export-studio-glbs.mjs",
     "export:blender": "blender --background --python scripts/blender_generate_assets.py",
     "export:blender:legacy": "blender --background --python scripts/blender_paraglider_pipeline.py"
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@types/three": "^0.178.0",
+    "esbuild": "^0.25.8",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^4.1.10"

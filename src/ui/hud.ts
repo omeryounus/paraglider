@@ -1,8 +1,10 @@
 import type { FlightState, LevelId, Progress, ScoreState } from '../game/types';
+import { CONTEST } from '../config/contest';
 import { BOOST_MAX } from '../config/constants';
 import { LEVELS } from '../config/levels';
 import { formatTime } from '../game/math';
 import { isUnlocked } from '../game/state';
+import { canCraft, type SurvivalState } from '../game/survival';
 
 export interface HudRefs {
   root: HTMLElement;
@@ -51,7 +53,8 @@ export function fillBiomeSelect(
   onPick: (id: LevelId) => void,
 ): void {
   hud.biome.replaceChildren();
-  for (const level of LEVELS) {
+  const catalog = CONTEST ? LEVELS.filter((level) => level.id === 'alpine') : LEVELS;
+  for (const level of catalog) {
     const opt = document.createElement('option');
     opt.value = level.id;
     const open = isUnlocked(progress, level.id);
@@ -130,6 +133,46 @@ export function paintHud(
     flight.speedBoost > 0 ? 0.9 : 0,
   );
   hud.speedLines.style.opacity = String(Math.min(1, intensity));
+}
+
+export function setSurviveMode(on: boolean): void {
+  const app = document.getElementById('app');
+  if (!app) return;
+  app.classList.toggle('survive', on);
+  app.classList.toggle('contest', CONTEST);
+}
+
+export function setHasScrap(on: boolean): void {
+  document.getElementById('app')?.classList.toggle('has-scrap', on);
+  const drawer = document.getElementById('craft-drawer');
+  if (drawer) drawer.hidden = !on;
+}
+
+export function paintSurvive(state: SurvivalState | null, timeLeft: number): void {
+  const fill = (id: string, value: number): void => {
+    const el = document.getElementById(id);
+    if (el) el.style.width = `${Math.max(0, Math.min(100, value))}%`;
+  };
+  if (!state) return;
+  fill('hud-integrity', state.integrity);
+  fill('hud-warmth', state.warmth);
+  fill('hud-storm', state.storm * 100);
+  const fabric = document.getElementById('inv-fabric');
+  const cord = document.getElementById('inv-cord');
+  if (fabric) fabric.textContent = String(state.fabric);
+  if (cord) cord.textContent = String(state.cord);
+  const patch = document.querySelector<HTMLButtonElement>('#craft-patch');
+  const bind = document.querySelector<HTMLButtonElement>('#craft-bind');
+  const wrap = document.querySelector<HTMLButtonElement>('#craft-wrap');
+  if (patch) patch.disabled = !canCraft(state, 'patch');
+  if (bind) bind.disabled = !canCraft(state, 'bind');
+  if (wrap) wrap.disabled = !canCraft(state, 'wrap');
+  const integrity = document.getElementById('hud-integrity');
+  const warmth = document.getElementById('hud-warmth');
+  integrity?.classList.toggle('low', state.integrity < 28);
+  warmth?.classList.toggle('low', state.warmth < 28);
+  const time = document.getElementById('hud-time');
+  time?.classList.toggle('low', timeLeft < 16 || state.storm > 0.72);
 }
 
 function must(sel: string): HTMLElement {

@@ -51,6 +51,12 @@ export function awardOrb(score: ScoreState): number {
   return pts;
 }
 
+export function awardCraft(score: ScoreState): number {
+  const pts = 500;
+  score.total += pts;
+  return pts;
+}
+
 export function awardNearMiss(score: ScoreState, dt: number): number {
   const pts = 90 * dt * score.combo;
   score.nearMiss += pts;
