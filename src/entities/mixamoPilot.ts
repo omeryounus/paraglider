@@ -230,6 +230,7 @@ const REST_FLIGHT: FlightState = {
   bigEars: false,
   stall: false,
   stallCharge: 0,
+  crashed: false,
   harnessRoll: 0,
   harnessPitch: 0,
   glideRatio: 11,

@@ -95,6 +95,7 @@ export interface FlightState {
   bigEars: boolean;
   stall: boolean;
   stallCharge: number;
+  crashed: boolean;
   harnessRoll: number;
   harnessPitch: number;
   glideRatio: number;

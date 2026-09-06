@@ -82,11 +82,12 @@ describe('isWallFold', () => {
     expect(flight.verticalSpeed).toBeLessThan(-3);
   });
 
-  it('skims terrain instead of locking sink when AGL bottoms out', () => {
-    const flight = createFlight();
-    flight.verticalSpeed = -4;
-    const ctx: PhysicsContext = {
-      flight,
+  it('hard terrain contact crashes the wing; gentle skim survives', () => {
+    const hard = createFlight();
+    hard.verticalSpeed = -9;
+    let crashed = false;
+    const hardCtx: PhysicsContext = {
+      flight: hard,
       position: new THREE.Vector3(0, 10, 0),
       input: idle(),
       dt: 1 / 60,
@@ -95,9 +96,57 @@ describe('isWallFold', () => {
       inThermal: false,
       inDowndraft: false,
       wind: new THREE.Vector3(),
+      onGroundContact: (impact) => {
+        crashed = impact < -7.2;
+      },
+    };
+    stepPhysics(hardCtx);
+    expect(hard.agl).toBeGreaterThanOrEqual(1.55);
+    expect(crashed).toBe(true);
+
+    const gentle = createFlight();
+    gentle.verticalSpeed = -2;
+    let gentleCrash = false;
+    const gentleCtx: PhysicsContext = {
+      flight: gentle,
+      position: new THREE.Vector3(0, 10, 0),
+      input: idle(),
+      dt: 1 / 60,
+      groundY: 9,
+      clearance: 80,
+      inThermal: false,
+      inDowndraft: false,
+      wind: new THREE.Vector3(),
+      onGroundContact: (impact) => {
+        gentleCrash = impact < -7.2;
+      },
+    };
+    stepPhysics(gentleCtx);
+    expect(gentleCrash).toBe(false);
+    // No free lift: the skim may only arrest descent, never climb.
+    expect(gentle.verticalSpeed).toBeLessThanOrEqual(0.001);
+  });
+
+  it('folding into a cliff face sets crashed', () => {
+    const flight = createFlight();
+    flight.agl = 18;
+    const ctx: PhysicsContext = {
+      flight,
+      position: new THREE.Vector3(0, 100, 0),
+      input: idle(),
+      dt: 1 / 60,
+      groundY: null,
+      clearance: 0.6,
+      inThermal: false,
+      inDowndraft: false,
+      wind: new THREE.Vector3(),
     };
     stepPhysics(ctx);
-    expect(flight.agl).toBeGreaterThanOrEqual(1.55);
-    expect(flight.verticalSpeed).toBeGreaterThan(0);
+    expect(flight.crashed).toBe(true);
+  });
+
+  it('clear air never sets crashed', () => {
+    const flight = drive(idle(), 2.5);
+    expect(flight.crashed).toBe(false);
   });
 });

@@ -57,7 +57,7 @@ const alpine: LevelDef = {
   ],
   gustStrength: 0.45,
   sport: 'teach',
-  launch: false,
+  launch: true,
   waterCrash: false,
   glideTax: 0,
   overBrakeSink: 0,

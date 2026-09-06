@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONTEST } from './config/contest';
-import { CRASH_SINK, LANDING_AGL, MISS_TIME_PENALTY, NEAR_MISS_MAX } from './config/constants';
+import { CRASH_SINK, FLARE_SINK, LANDING_AGL, MISS_TIME_PENALTY, NEAR_MISS_MAX } from './config/constants';
 import { getLevel, LEVELS } from './config/levels';
 import { audio } from './game/audio';
 import { createAtmosphere, type Atmosphere } from './game/atmosphere';
@@ -163,10 +163,13 @@ const sampleGround = (origin: THREE.Vector3): number | null => {
 
 const sampleClearance = (origin: THREE.Vector3, heading: number): number => {
   if (!terrain) return 80;
+  // Probe the flight direction (and slightly below it for rising terrain),
+  // plus down for ground proximity. Sideways rays never saw the cliff ahead.
+  const fwd = new THREE.Vector3(Math.sin(heading), -0.12, Math.cos(heading)).normalize();
   const dirs = [
     down,
-    new THREE.Vector3(Math.cos(heading), 0, -Math.sin(heading)),
-    new THREE.Vector3(-Math.cos(heading), 0, Math.sin(heading)),
+    fwd,
+    new THREE.Vector3(fwd.x, 0, fwd.z).normalize(),
   ];
   let best = 80;
   for (const dir of dirs) {
@@ -209,9 +212,8 @@ function playInput() {
   if (lesson === 'steer') {
     return {
       ...raw,
-      dive: 0,
-      speedBar: 0,
-      flare: false,
+      // Teach turns, not stillness: keep dive/speedbar alive so the wing
+      // feels responsive; only lock the exotic systems.
       boost: false,
       bigEars: false,
     };
@@ -448,9 +450,16 @@ function finish(kind: ResultKind): void {
 function handleLanding(): void {
   if (!course) return;
   const band = padResult(course, glider.root.position);
-  const soft = Math.abs(flight.verticalSpeed) < 1.5;
+  if (!band) {
+    // Off the pad entirely — ground contact handled by the crash path.
+    audio.playLandingSound(false);
+    finish('crash');
+    return;
+  }
+  // verticalSpeed is read pre-clamp (called before stepPhysics on the pad).
+  const soft = Math.abs(flight.verticalSpeed) < FLARE_SINK;
   const gentle = Math.abs(flight.verticalSpeed) < CRASH_SINK;
-  if (band && gentle) {
+  if (gentle) {
     awardLanding(score, band, soft);
     audio.playLandingSound(soft);
     popups.push(
@@ -535,6 +544,20 @@ function tickPlay(dt: number): void {
     const groundY = sampleGround(pos);
     const clearance = sampleClearance(pos, flight.heading);
     syncLesson();
+
+    // Judge the landing BEFORE physics touches the sink rate: the flare
+    // window near the pad decides soft vs hard, not the ground clamp.
+    if (
+      flight.agl <= LANDING_AGL + 0.05 &&
+      groundY !== null &&
+      pos.y - groundY <= LANDING_AGL + 0.05 &&
+      padResult(course, pos)
+    ) {
+      handleLanding();
+      return;
+    }
+
+    let crashedThisFrame = false;
     stepPhysics({
       flight,
       position: pos,
@@ -548,7 +571,19 @@ function tickPlay(dt: number): void {
       glideTax: level.glideTax,
       overBrakeSink: level.overBrakeSink,
       ridgeLift: level.ridgeLift,
+      onGroundContact: (impact) => {
+        // Off-pad ground touch: gentle flare-touch scrubs speed and survives
+        // at the physics skim floor; anything harder than a paraglider
+        // touchdown (CRASH_SINK) folds the wing.
+        crashedThisFrame = impact < -CRASH_SINK;
+      },
     });
+    if (crashedThisFrame || flight.crashed) {
+      audio.playLandingSound(false);
+      popups.push(spawnPopup(popupHost, pos, 'CRASH', '#ff5a4a'));
+      finish('crash');
+      return;
+    }
     flyClock += dt;
     recordGhost(ghostSamples, flyClock, pos, flight.heading, flight.bank);
     if (ghost) stepGhost(ghost, flyClock);
@@ -608,7 +643,6 @@ function tickPlay(dt: number): void {
       finish('crash');
       return;
     }
-    if (flight.agl <= LANDING_AGL + 0.05 && padResult(course, pos)) handleLanding();
   }
 
   // Update audio dynamically with airspeed & variometer climb/sink

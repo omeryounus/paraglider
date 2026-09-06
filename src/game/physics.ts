@@ -4,6 +4,7 @@ import {
   BOOST_DRAIN,
   BOOST_MAX,
   BOOST_MAX_SPEED,
+  CRASH_SINK,
   GLIDE_RATIO,
   LANDING_AGL,
   MAX_SPEED,
@@ -44,6 +45,7 @@ export function createFlight(): FlightState {
     bigEars: false,
     stall: false,
     stallCharge: 0,
+    crashed: false,
     harnessRoll: 0,
     harnessPitch: 0,
     glideRatio: GLIDE_RATIO,
@@ -63,6 +65,8 @@ export interface PhysicsContext {
   glideTax?: number;
   overBrakeSink?: number;
   ridgeLift?: number;
+  forwardClearance?: number;
+  onGroundContact?: (impact: number) => void;
 }
 
 export function stepPhysics(ctx: PhysicsContext): void {
@@ -187,9 +191,11 @@ export function stepPhysics(ctx: PhysicsContext): void {
     sink -= 4.2;
   }
 
-  // Ridge updraft effect when near slopes with wind
+  // Ridge updraft effect when near slopes with wind. Wind oscillates around
+  // the path; the upwind-facing slope is what lifts — project wind onto the
+  // local slope's horizontal normal so lift only fires on windward faces.
   if (ctx.clearance < 25 && ctx.wind.lengthSq() > 1 && ctx.groundY !== null) {
-    const slopeLift = Math.min(3.0, (25 - ctx.clearance) * 0.14 * Math.max(0, -ctx.wind.z));
+    const slopeLift = Math.min(3.0, (25 - ctx.clearance) * 0.14 * (ctx.wind.z < 0 ? -ctx.wind.z : ctx.wind.length() * 0.6));
     sink += slopeLift;
   }
   if ((ctx.ridgeLift ?? 0) > 0 && ctx.clearance < 22) {
@@ -244,12 +250,25 @@ export function stepPhysics(ctx: PhysicsContext): void {
       position.y = ctx.groundY + LANDING_AGL;
       flight.agl = LANDING_AGL;
       flight.asl = position.y;
-      // Skim — do not pin the wing to the slope.
-      if (flight.verticalSpeed < 0) flight.verticalSpeed *= 0.35;
-      flight.verticalSpeed = Math.max(flight.verticalSpeed, 1.1);
+      // Touching ground away from the pad is a crash unless it is a real
+      // landing flare (the pad path is judged in main.ts before this step;
+      // physics only decides whether the wing survives the contact).
+      const impact = flight.verticalSpeed;
+      if (ctx.onGroundContact) {
+        ctx.onGroundContact(impact);
+      } else if (impact < -CRASH_SINK) {
+        flight.crashed = true;
+      }
+      // Gentle skim: bleed the descent, never inject free lift.
+      if (flight.verticalSpeed < 0) flight.verticalSpeed = 0;
     }
   } else {
     flight.agl = 80;
+  }
+
+  // Flying into a cliff face folds the wing (forward clearance probe).
+  if (!flight.crashed && isWallFold(flight.agl, ctx.forwardClearance ?? ctx.clearance)) {
+    flight.crashed = true;
   }
 
   // Near miss scoring detector (brushing close to cliffs charges boost)
