@@ -572,10 +572,10 @@ function tickPlay(dt: number): void {
       overBrakeSink: level.overBrakeSink,
       ridgeLift: level.ridgeLift,
       onGroundContact: (impact) => {
-        // Off-pad ground touch: gentle flare-touch scrubs speed and survives
-        // at the physics skim floor; anything harder than a paraglider
-        // touchdown (CRASH_SINK) folds the wing.
-        crashedThisFrame = impact < -CRASH_SINK;
+        // Off-pad ground touch: only a flare-soft graze (≤ FLARE_SINK) may
+        // skim the slope; anything harder folds the wing. There is no safe
+        // landing off the pad.
+        crashedThisFrame = impact < -FLARE_SINK;
       },
     });
     if (crashedThisFrame || flight.crashed) {
