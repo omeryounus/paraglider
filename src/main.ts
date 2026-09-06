@@ -161,8 +161,8 @@ const sampleGround = (origin: THREE.Vector3): number | null => {
   return hit ? hit.point.y : terrain.sampleHeight(origin.x, origin.z);
 };
 
-const sampleClearance = (origin: THREE.Vector3, heading: number): number => {
-  if (!terrain) return 80;
+const sampleClearance = (origin: THREE.Vector3, heading: number): { clearance: number; lateral: number } => {
+  if (!terrain) return { clearance: 80, lateral: 80 };
   // Probe the flight direction (and slightly below it for rising terrain),
   // plus down for ground proximity. Sideways rays never saw the cliff ahead.
   const fwd = new THREE.Vector3(Math.sin(heading), -0.12, Math.cos(heading)).normalize();
@@ -178,7 +178,14 @@ const sampleClearance = (origin: THREE.Vector3, heading: number): number => {
     const hit = raycaster.intersectObject(terrain.collision, true)[0];
     if (hit) best = Math.min(best, hit.distance);
   }
-  return best;
+  // Lateral spacing only (forward ray, no down ray): flying low over flat
+  // terrain is not a "near miss" — only brush-distance to something AHEAD
+  // (a cliff face, a ridge wall) counts.
+  const flat = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();
+  raycaster.set(origin, flat);
+  raycaster.far = NEAR_MISS_MAX + 2;
+  const lateralHit = raycaster.intersectObject(terrain.collision, true)[0];
+  return { clearance: best, lateral: lateralHit ? lateralHit.distance : 80 };
 };
 
 function setPaused(value: boolean): void {
@@ -542,7 +549,7 @@ function tickPlay(dt: number): void {
       return;
     }
     const groundY = sampleGround(pos);
-    const clearance = sampleClearance(pos, flight.heading);
+    const { clearance, lateral } = sampleClearance(pos, flight.heading);
     syncLesson();
 
     // Judge the landing BEFORE physics touches the sink rate: the flare
@@ -565,6 +572,7 @@ function tickPlay(dt: number): void {
       dt,
       groundY,
       clearance,
+      lateralClearance: lateral,
       inThermal: insideThermal(course, pos),
       inDowndraft: insideHazard(course, pos),
       wind,
@@ -588,7 +596,7 @@ function tickPlay(dt: number): void {
     recordGhost(ghostSamples, flyClock, pos, flight.heading, flight.bank);
     if (ghost) stepGhost(ghost, flyClock);
     const magnet = nextRing(course);
-    if (magnet) assistToward(flight, pos, magnet.position, dt);
+    if (magnet) assistToward(flight, pos, magnet.position, dt, wind);
     tickCombo(score, dt);
     if (flight.nearMiss) awardNearMiss(score, dt);
     if (flight.inThermal && !inThermalLast) audio.playThermalSting();

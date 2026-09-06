@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { BASE_SPEED, GLIDE_RATIO } from '../config/constants';
 import type { InputState } from './input';
-import { createFlight, isWallFold, stepPhysics, type PhysicsContext } from './physics';
+import { assistToward, createFlight, isWallFold, stepPhysics, type PhysicsContext } from './physics';
 
 function idle(over: Partial<InputState> = {}): InputState {
   return {
@@ -39,6 +39,75 @@ function drive(input: InputState, seconds: number, seed = createFlight()): Retur
   for (let i = 0; i < steps; i++) stepPhysics(ctx);
   return flight;
 }
+
+describe('assistToward wind drift', () => {
+  it('aims upwind of the target when wind blows (intercept lead)', () => {
+    const flight = createFlight();
+    flight.heading = 0; // flying +Z
+    const from = new THREE.Vector3(0, 100, 0);
+    const target = new THREE.Vector3(0, 100, 200); // dead ahead
+    const dt = 1 / 60;
+    const calm = createFlight();
+    calm.heading = 0;
+    assistToward(calm, from.clone(), target.clone(), dt, new THREE.Vector3(0, 0, 0));
+    const windy = createFlight();
+    windy.heading = 0;
+    assistToward(windy, from.clone(), target.clone(), dt, new THREE.Vector3(5, 0, 0)); // wind pushes +X
+    // Wind from -X pushing the glider +X means the assist must crab into -X.
+    expect(windy.heading).toBeLessThan(calm.heading);
+  });
+
+  it('with no wind behaves like the old direct aim', () => {
+    const a = createFlight();
+    const b = createFlight();
+    a.heading = 0.5;
+    b.heading = 0.5;
+    const from = new THREE.Vector3(0, 100, 0);
+    const target = new THREE.Vector3(30, 100, 100);
+    assistToward(a, from.clone(), target.clone(), 1 / 60);
+    assistToward(b, from.clone(), target.clone(), 1 / 60, new THREE.Vector3());
+    expect(a.heading).toBeCloseTo(b.heading, 10);
+  });
+});
+
+describe('near miss lateral spacing', () => {
+  it('low flight over flat ground does not farm near-miss boost', () => {
+    const flight = createFlight();
+    const ctx: PhysicsContext = {
+      flight,
+      position: new THREE.Vector3(0, 4, 0), // 2.5 m over the ground
+      input: idle(),
+      dt: 1 / 60,
+      groundY: 1.5,
+      clearance: 2.5, // down-ray: very close
+      lateralClearance: 80, // nothing ahead within 80 m
+      inThermal: false,
+      inDowndraft: false,
+      wind: new THREE.Vector3(),
+    };
+    stepPhysics(ctx);
+    expect(flight.nearMiss).toBe(false);
+  });
+
+  it('brushing a cliff ahead still charges near-miss boost', () => {
+    const flight = createFlight();
+    const ctx: PhysicsContext = {
+      flight,
+      position: new THREE.Vector3(0, 120, 0),
+      input: idle(),
+      dt: 1 / 60,
+      groundY: null,
+      clearance: 3,
+      lateralClearance: 3,
+      inThermal: false,
+      inDowndraft: false,
+      wind: new THREE.Vector3(),
+    };
+    stepPhysics(ctx);
+    expect(flight.nearMiss).toBe(true);
+    expect(flight.boost).toBeGreaterThan(0);
+  });
+});
 
 describe('stepPhysics polar', () => {
   it('trim still-air sink matches airspeed / glide ratio', () => {

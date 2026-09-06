@@ -66,6 +66,9 @@ export interface PhysicsContext {
   overBrakeSink?: number;
   ridgeLift?: number;
   forwardClearance?: number;
+  /** Lateral spacing to terrain (forward ray, no down ray). Near-miss boost
+   *  charges only on cliff/ridge brushes — not on low flight over flat ground. */
+  lateralClearance?: number;
   onGroundContact?: (impact: number) => void;
 }
 
@@ -271,8 +274,12 @@ export function stepPhysics(ctx: PhysicsContext): void {
     flight.crashed = true;
   }
 
-  // Near miss scoring detector (brushing close to cliffs charges boost)
-  flight.nearMiss = ctx.clearance > NEAR_MISS_MIN && ctx.clearance < NEAR_MISS_MAX;
+  // Near miss scoring detector (brushing close to cliffs charges boost).
+  // Uses lateral spacing when available: flying low over open flat ground is
+  // ground-skimming, not a cliff brush — without the forward-only ray this
+  // misfired permanently on every low pass and farmed free boost.
+  const spacing = ctx.lateralClearance ?? ctx.clearance;
+  flight.nearMiss = spacing > NEAR_MISS_MIN && spacing < NEAR_MISS_MAX;
   if (flight.nearMiss) {
     flight.boost = Math.min(BOOST_MAX, flight.boost + 14 * dt);
   }
@@ -289,12 +296,27 @@ export function grantBoost(flight: FlightState, amount: number): void {
   flight.boost = Math.min(BOOST_MAX, flight.boost + amount);
 }
 
-export function assistToward(flight: FlightState, from: THREE.Vector3, target: THREE.Vector3, dt: number): void {
-  const desired = Math.atan2(target.x - from.x, target.z - from.z);
+export function assistToward(
+  flight: FlightState,
+  from: THREE.Vector3,
+  target: THREE.Vector3,
+  dt: number,
+  wind = new THREE.Vector3(),
+): void {
+  // Aim upwind of the ring: the glider drifts with the wind, so pointing
+  // straight at the target makes the course line sag downwind. Lead the
+  // drift by the estimated flight time to the ring.
+  const dist = from.distanceTo(target);
+  const flightTime = dist / Math.max(flight.speed, 1);
+  const lead = new THREE.Vector3(
+    target.x - wind.x * flightTime,
+    target.y,
+    target.z - wind.z * flightTime,
+  );
+  const desired = Math.atan2(lead.x - from.x, lead.z - from.z);
   let delta = desired - flight.heading;
   while (delta > Math.PI) delta -= Math.PI * 2;
   while (delta < -Math.PI) delta += Math.PI * 2;
-  const dist = from.distanceTo(target);
   const pull = dist < 160 ? 0.22 : 0.1;
   flight.heading += delta * pull * dt;
 }
