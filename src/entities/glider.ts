@@ -852,81 +852,6 @@ function deformCanopy(
   visual.wing.geometry.computeVertexNormals();
 }
 
-function makeCanopyFabric(): THREE.CanvasTexture {
-  const w = 640;
-  const h = 160;
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return new THREE.CanvasTexture(canvas);
-  const cells = ['#141c28', '#e24b3a', '#f3ebe0', '#187a82', '#f3ebe0', '#d4a054', '#f3ebe0', '#187a82', '#f3ebe0', '#e24b3a', '#141c28'];
-  const n = cells.length;
-  for (let i = 0; i < n; i++) {
-    ctx.fillStyle = cells[i];
-    ctx.fillRect(Math.floor((i / n) * w), 0, Math.ceil(w / n) + 1, h);
-  }
-  ctx.fillStyle = '#f6f1e8';
-  ctx.fillRect(0, 0, w, Math.round(h * 0.11));
-  ctx.fillStyle = 'rgba(20,28,40,0.28)';
-  ctx.fillRect(0, Math.round(h * 0.86), w, Math.round(h * 0.14));
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-function paintStudioCanopy(mesh: THREE.Mesh): void {
-  // The studio parachute GLB ships its own baked PBR material (baseColor +
-  // normal + metallicRoughness, tiled UVs). DO NOT paint over it — the
-  // procedurally generated fabric below was an early placeholder that
-  // flattened the asset's real wine-red fabric into color bands.
-  // Only repaint when the GLB arrived mapless (fallback / broken material).
-  const realMats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-  const hasRealMap = realMats.some((raw) => {
-    const mat = raw as THREE.MeshStandardMaterial;
-    return mat?.isMeshStandardMaterial && !!mat.map;
-  });
-  if (hasRealMap) {
-    for (const raw of realMats) {
-      const mat = raw as THREE.MeshStandardMaterial;
-      if (!mat?.isMeshStandardMaterial) continue;
-      prepMaps(mat, true);
-    }
-    return;
-  }
-
-  const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
-  if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
-  const box = mesh.geometry.boundingBox;
-  if (!box) return;
-  const size = box.getSize(new THREE.Vector3());
-  const halfX = Math.max(0.01, size.x * 0.5);
-  const spanZ = Math.max(0.01, size.z);
-  const uvs = new Float32Array(pos.count * 2);
-  for (let i = 0; i < pos.count; i++) {
-    const spanT = THREE.MathUtils.clamp(pos.getX(i) / halfX, -1, 1);
-    const chordT = THREE.MathUtils.clamp((pos.getZ(i) - box.min.z) / spanZ, 0, 1);
-    uvs[i * 2] = spanT * 0.5 + 0.5;
-    uvs[i * 2 + 1] = chordT;
-  }
-  mesh.geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-  const fabric = makeCanopyFabric();
-  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-  for (const raw of mats) {
-    const mat = raw as THREE.MeshStandardMaterial;
-    if (!mat?.isMeshStandardMaterial) continue;
-    mat.vertexColors = false;
-    mat.map = fabric;
-    mat.color.set(0xffffff);
-    mat.roughness = 0.62;
-    mat.metalness = 0;
-    mat.envMapIntensity = 0.22;
-    mat.needsUpdate = true;
-  }
-}
-
 function deformStudioCanopy(
   visual: GliderVisual,
   flight: FlightState,
@@ -1229,64 +1154,18 @@ function fitAsset(src: THREE.Object3D, targetSpan: number, axis: 'x' | 'y'): THR
 }
 
 export async function attachStudioAssets(visual: GliderVisual): Promise<void> {
-  const parachute =
-    (await loadGlbScene('./models/parachute.glb', true)) ??
-    (await loadGlbScene('./models/canopy.glb', true));
+  // NOTE: the studio "parachute.glb" is a round DOME parachute (2.09:1
+  // footprint, 1.8 m-tall volume with suspension lines) — a skydiving canopy,
+  // not a paraglider. This is a PARAGLIDER: the designed ram-air wing
+  // (NACA-cambered double surface, open intakes, rib tapes, ripstop fabric,
+  // radiant ruby panels with wine tips — see createAirfoil/panelColor) is the
+  // correct canopy and stays the render. Only the PILOT is loaded from studio
+  // assets below; the wing is never replaced.
   const mixamo = await loadMixamoPilot();
   const person = mixamo
     ? null
     : ((await loadGlbScene('./models/person.glb', false)) ??
       (await loadGlbScene('./models/pilot.glb', false)));
-
-  if (parachute) {
-    parachute.name = 'Hyper3D_Parachute';
-    const box = fitAsset(parachute, SPAN, 'x');
-    const center = box.getCenter(new THREE.Vector3());
-    parachute.position.sub(center);
-    parachute.position.y -= box.min.y;
-    parachute.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      mesh.frustumCulled = false;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const raw of mats) {
-        const mat = raw as THREE.MeshStandardMaterial;
-        if (!mat?.isMeshStandardMaterial) continue;
-        mat.transparent = false;
-        mat.opacity = 1;
-        mat.alphaTest = 0;
-        mat.depthWrite = true;
-        mat.side = THREE.DoubleSide;
-        mat.forceSinglePass = false;
-        mat.roughness = 0.62;
-        mat.metalness = 0;
-        mat.metalnessMap = null;
-        mat.envMapIntensity = 0.22;
-        prepMaps(mat, false);
-        mat.needsUpdate = true;
-      }
-    });
-    visual.wing.visible = false;
-    visual.canopy.add(parachute);
-    visual.root.userData.blenderCanopy = true;
-    parachute.updateMatrixWorld(true);
-    let canopyMesh: THREE.Mesh | undefined;
-    parachute.traverse((child) => {
-      if (canopyMesh) return;
-      const mesh = child as THREE.Mesh;
-      if (mesh.isMesh) canopyMesh = mesh;
-    });
-    if (canopyMesh) {
-      const geo = canopyMesh.geometry;
-      const attr = geo.getAttribute('position');
-      visual.root.userData.studioCanopyMesh = canopyMesh;
-      visual.root.userData.studioRest = Float32Array.from(attr.array as Float32Array);
-      const box = new THREE.Box3().setFromBufferAttribute(attr as THREE.BufferAttribute);
-      visual.root.userData.studioSize = box.getSize(new THREE.Vector3());
-      visual.root.userData.studioMinZ = box.min.z;
-      paintStudioCanopy(canopyMesh);
-    }
-  }
 
   if (mixamo) {
     const rig = visual.root.userData.pilot as PilotRig;
