@@ -878,6 +878,25 @@ function makeCanopyFabric(): THREE.CanvasTexture {
 }
 
 function paintStudioCanopy(mesh: THREE.Mesh): void {
+  // The studio parachute GLB ships its own baked PBR material (baseColor +
+  // normal + metallicRoughness, tiled UVs). DO NOT paint over it — the
+  // procedurally generated fabric below was an early placeholder that
+  // flattened the asset's real wine-red fabric into color bands.
+  // Only repaint when the GLB arrived mapless (fallback / broken material).
+  const realMats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  const hasRealMap = realMats.some((raw) => {
+    const mat = raw as THREE.MeshStandardMaterial;
+    return mat?.isMeshStandardMaterial && !!mat.map;
+  });
+  if (hasRealMap) {
+    for (const raw of realMats) {
+      const mat = raw as THREE.MeshStandardMaterial;
+      if (!mat?.isMeshStandardMaterial) continue;
+      prepMaps(mat, true);
+    }
+    return;
+  }
+
   const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
   if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
   const box = mesh.geometry.boundingBox;
