@@ -127,9 +127,10 @@ const coachEl = document.querySelector<HTMLElement>('#coach')!;
 const volSlider = document.querySelector<HTMLInputElement>('#vol-slider');
 
 const ALPINE_COACH: Array<{ until: number; text: string }> = [
-  { until: 16, text: 'Gold packs are fabric. Teal packs are cord. Grab both.' },
-  { until: 36, text: 'Blue air is heat. Patch the canopy before it shreds.' },
-  { until: 90, text: 'Craft with 1 / 2 / 3, then flare the valley pad.' },
+  { until: 14, text: 'SURVIVE: gold = fabric, teal = cord. Keys 1 / 2 / 3 craft.' },
+  { until: 32, text: 'Canopy tears as the storm ramps — Patch (2 fabric) repairs it.' },
+  { until: 52, text: 'Blue thermals keep you warm; Heat wrap (1+1) tops it up.' },
+  { until: 90, text: 'Land on the valley pad before the storm closes.' },
 ];
 
 let progress: Progress = loadProgress();
@@ -333,7 +334,11 @@ async function startLevel(id: LevelId, attract = false): Promise<void> {
   score = emptyScore();
   survival = level.id === 'alpine' ? createSurvival() : null;
   setSurviveMode(Boolean(survival));
-  setHasScrap(false);
+  // Survival levels show the craft drawer from frame one — judges (and new
+  // players) must SEE the gather→craft→survive loop before they need it,
+  // not after the first pickup. Zero-fabric state with visible Patch/Bind/
+  // Wrap buttons is the genre's storefront.
+  setHasScrap(Boolean(survival));
   ghostSamples = [];
   flyClock = 0;
   launch = null;
@@ -690,7 +695,7 @@ function tickPlay(dt: number): void {
             : survival && survival.warmth < 28
               ? 'Freezing — ride blue lift or craft a heat wrap (3)'
               : lesson === 'steer'
-                ? 'A / D banks the wing. Grab gold fabric and teal cord.'
+                ? 'A / D banks the wing. Gather gold fabric + teal cord, then craft 1 / 2 / 3'
                 : lesson === 'flare' || !nxt
                   ? 'Hold Space or FLARE onto the pad'
                   : nxt

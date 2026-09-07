@@ -60,3 +60,18 @@ The notes below are outdated. Do not submit this file.
   - Compiles TypeScript and builds production distribution.
   - Bundles assets and generates `aero-glide-submission.zip` (9.55 MB).
 - **Status**: 100% Compliant with all competition rules.
+
+---
+
+## Session 6: Reviewer Feedback — Readable Source Packaging & Genre Legibility
+- **Feedback received**: (1) index.html was a loader pointing to a minified bundle — game code must be readable inside index.html; (2) prototype didn't read as Survival & Resource Management.
+- **Root cause (1)**: submitted zip was the Vite dist build. Rebuilt `scripts/assemble-contest.mjs` into the official packaging shape from the Design Guidance page:
+  - ALL game code assembled into index.html — unminified, 25 source modules with `/* ---- src/<path> ---- */` section banners so judges can navigate the source (~7,000 lines).
+  - Libraries in `vendor/` (required folder name): three r178 `three.module.js` + `three.core.js` + the addons the game imports (GLTFLoader, DRACOLoader, Sky, Water, BufferGeometryUtils, EffectComposer, RenderPass, OutputPass) — copied by a recursive dependency walker that follows every relative import (pulls Pass/ShaderPass/CopyShader/MaskPass and shader deps automatically).
+  - `three` and `three/addons/…` resolve via an import map to relative vendor paths — zero external requests.
+  - Assets as real files with relative paths: `models/`, `terrains/`, `audio/` (decoder-free GLBs — Draco's WASM Worker is blocked on file://, and double-clickers get a serve-over-HTTP guard message instead of a black screen).
+- **Root cause (2)**: the survival loop (gather fabric/cord → craft Patch/Bind/Heat wrap → manage warmth/canopy integrity vs the storm) existed since session 1 but was invisible: the craft drawer only appeared after the first pickup, and coach lines mentioned crafting late. Fixes:
+  - Craft drawer now visible from frame one of Alpine (zero-fabric state with disabled Patch/Bind/Wrap buttons = the genre's storefront).
+  - Coach line 1 now leads with "SURVIVE: gold = fabric, teal = cord. Keys 1 / 2 / 3 craft."
+  - HUD steer hint now says "Gather gold fabric + teal cord, then craft 1 / 2 / 3."
+- **Verification**: full judge procedure — fresh unzip → `python3 -m http.server` → fresh context → portrait (405×720) session: boots to title card, Alpine loads studio mountain terrain, W-sprint launch → flight (AGL 58 / 50 km/h), craft drawer + meters live (integrity 99.98% / warmth 87.9% / storm ramping), 30 requests all local, ZERO console errors. file:// double-click shows serve instructions instead of a black screen. tsc clean, 27/27 vitest, site build (Vercel) unaffected. Zip: 3.44 MB / 35 MB budget.
