@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 /**
  * Assemble the MHCP / Devpost zip:
- * - all of OUR game code inlined into index.html, unminified
- * - Three.js + addons in vendor/, referenced by import map
- * - no CrazyGames SDK, no CDN, index.html at zip root
+ * - ONE self-contained index.html: game code + all of three.js inlined in a
+ *   single inline <script type="module">, every asset inlined as a data URL.
+ * - No ES-module fetches, no Worker, no network at all → works from file://
+ *   (double-clicked from an unzipped folder) and from any web host.
+ * - No CrazyGames SDK, no CDN, index.html at zip root.
+ * - Draco is NOT used here: its WASM decoder needs a Worker, which file://
+ *   blocks. contest/assets/ holds decoder-free GLBs (uncompressed geometry,
+ *   WebP textures) produced by scripts/undraco.mjs.
  */
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
@@ -16,28 +21,20 @@ const ROOT = path.resolve(__dirname, '..');
 const STAGE = fs.mkdtempSync(path.join('/tmp', 'aero-contest-'));
 const JS_OUT = path.join(STAGE, 'game.assembled.js');
 
-function walkImports(entryRel, destRoot) {
-  const jsm = path.join(ROOT, 'node_modules/three/examples/jsm');
-  const seen = new Set();
-  const queue = [entryRel];
-  while (queue.length) {
-    const rel = queue.pop();
-    if (seen.has(rel)) continue;
-    seen.add(rel);
-    const src = path.join(jsm, rel);
-    if (!fs.existsSync(src)) continue;
-    const dest = path.join(destRoot, rel);
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.copyFileSync(src, dest);
-    const text = fs.readFileSync(src, 'utf8');
-    const re = /from\s+['"](\.\.?\/[^'"]+)['"]/g;
-    let m;
-    while ((m = re.exec(text))) {
-      const resolved = path.normalize(path.join(path.dirname(rel), m[1])).replace(/\\/g, '/');
-      queue.push(resolved);
-    }
-  }
-}
+// Assets inlined into index.html. Keys are the runtime URLs the game requests.
+const CONTEST_ASSETS = {
+  './models/parachute.glb': 'parachute.glb',
+  './models/mixamo/pilot.glb': 'pilot-mixamo.glb',
+  './models/pilot.glb': 'pilot.glb',
+  './terrains/mountain.glb': 'mountain.glb',
+  './audio/ring.ogg': 'ring.ogg',
+  './audio/ring-gold.ogg': 'ring-gold.ogg',
+  './audio/boost.ogg': 'boost.ogg',
+  './audio/orb.ogg': 'orb.ogg',
+  './audio/miss.ogg': 'miss.ogg',
+  './audio/land.ogg': 'land.ogg',
+  './audio/crash.ogg': 'crash.ogg',
+};
 
 async function bundleGame(build) {
   const banner = `/**
@@ -48,7 +45,8 @@ async function bundleGame(build) {
  * Core loop: gather fabric + cord, craft Patch / Bind / Heat wrap, land
  * before storm / freeze / canopy shred.
  *
- * Three.js r178 loads from ./vendor via the import map. Do not minify this file.
+ * three.js r178 + used addons are bundled above this banner in the same
+ * module scope. Do not minify this file.
  */
 `;
   await build({
@@ -72,7 +70,7 @@ async function bundleGame(build) {
       'import.meta.env.MODE': '"contest"',
       'import.meta.env.BASE_URL': '"./"',
     },
-    external: ['three', 'three/*'],
+    // three + addons bundled INTO the game module — no vendor/ fetches at all.
     plugins: [
       {
         name: 'src-banners',
@@ -91,47 +89,24 @@ async function bundleGame(build) {
   });
 }
 
-function copyVendor() {
-  const vendor = path.join(STAGE, 'vendor');
-  const addons = path.join(vendor, 'addons');
-  fs.mkdirSync(addons, { recursive: true });
-  fs.copyFileSync(
-    path.join(ROOT, 'node_modules/three/build/three.module.js'),
-    path.join(vendor, 'three.module.js'),
-  );
-  // three r178+: three.module.js re-exports from a sibling three.core.js.
-  fs.copyFileSync(
-    path.join(ROOT, 'node_modules/three/build/three.core.js'),
-    path.join(vendor, 'three.core.js'),
-  );
-  const needed = [
-    'objects/Sky.js',
-    'objects/Water.js',
-    'loaders/GLTFLoader.js',
-    'loaders/DRACOLoader.js',
-    'utils/BufferGeometryUtils.js',
-    'postprocessing/EffectComposer.js',
-    'postprocessing/OutputPass.js',
-    'postprocessing/RenderPass.js',
-  ];
-  for (const rel of needed) walkImports(rel, addons);
-}
-
-function copyAssets() {
-  const copy = (from, to) => {
-    fs.mkdirSync(path.dirname(to), { recursive: true });
-    fs.copyFileSync(from, to);
-  };
-  for (const name of fs.readdirSync(path.join(ROOT, 'public/audio')).filter((n) => n.endsWith('.ogg'))) {
-    copy(path.join(ROOT, 'public/audio', name), path.join(STAGE, 'audio', name));
+function assetManifest() {
+  // Data-URL manifest consumed by the fetch shim below.
+  const lines = [];
+  for (const [url, file] of Object.entries(CONTEST_ASSETS)) {
+    const glb = fs.existsSync(path.join(ROOT, 'contest/assets', file));
+    const p = glb
+      ? path.join(ROOT, 'contest/assets', file)
+      : path.join(ROOT, 'public', url.replace('./', ''));
+    if (!fs.existsSync(p)) throw new Error(`missing contest asset ${p}`);
+    const b64 = fs.readFileSync(p).toString('base64');
+    const mime = file.endsWith('.glb')
+      ? 'model/gltf-binary'
+      : file.endsWith('.ogg')
+        ? 'audio/ogg'
+        : 'application/octet-stream';
+    lines.push(`  '${url}': 'data:${mime};base64,${b64}',`);
   }
-  copy(path.join(ROOT, 'public/models/parachute.glb'), path.join(STAGE, 'models/parachute.glb'));
-  copy(path.join(ROOT, 'public/models/pilot.glb'), path.join(STAGE, 'models/pilot.glb'));
-  copy(path.join(ROOT, 'public/models/mixamo/pilot.glb'), path.join(STAGE, 'models/mixamo/pilot.glb'));
-  copy(path.join(ROOT, 'public/terrains/mountain.glb'), path.join(STAGE, 'terrains/mountain.glb'));
-  for (const name of ['draco_decoder.js', 'draco_decoder.wasm', 'draco_wasm_wrapper.js']) {
-    copy(path.join(ROOT, 'public/draco', name), path.join(STAGE, 'draco', name));
-  }
+  return lines.join('\n');
 }
 
 function writeIndex() {
@@ -145,18 +120,38 @@ function writeIndex() {
   let game = fs.readFileSync(JS_OUT, 'utf8');
   // Contest build never talks to CrazyGames even if a host injects the SDK.
   game = game.replaceAll('https://sdk.crazygames.com', '');
-  const importMap = `{
-      "imports": {
-        "three": "./vendor/three.module.js",
-        "three/addons/": "./vendor/addons/"
-      }
-    }`;
-  const tag = `    <script type="importmap">
-    ${importMap}
-    </script>
-    <script type="module">
+
+  const prelude = `<script>
+    // Contest pack: intercept fetch for the inlined asset manifest so the
+    // game runs from file:// with zero network access. three's FileLoader
+    // passes a Request object whose .url is ABSOLUTE (resolved against the
+    // page), so match by exact key OR by path suffix.
+    (() => {
+      const manifest = {
+${assetManifest()}
+      };
+      const orig = window.fetch;
+      window.fetch = function (input, init) {
+        let url = '';
+        if (typeof input === 'string') url = input;
+        else if (input && typeof input.url === 'string') url = input.url; // Request
+        if (manifest[url]) return orig(manifest[url], init);
+        const tail = url.split('?')[0].replace(/^\\/+/, '');
+        for (const key of Object.keys(manifest)) {
+          const rel = key.slice(2); // strip leading ./
+          if (tail === rel || tail.endsWith('/' + rel)) {
+            return orig(manifest[key], init);
+          }
+        }
+        return orig(input, init);
+      };
+    })();
+  </script>`;
+
+  const tag = `  ${prelude}
+  <script type="module">
 ${game}
-    </script>`;
+  </script>`;
   html = html.replace('<script type="module" src="./src/main.ts"></script>', tag);
   if (/crazygames\.com/.test(html)) {
     throw new Error('CrazyGames URL leaked into contest index.html');
@@ -196,8 +191,10 @@ print("\\n".join(names[:20]))
 html = z.read("index.html").decode("utf-8", "replace")
 if "index.html" not in names:
     raise SystemExit("FAIL: index.html not at zip root")
-if any(n.endswith("/index.html") for n in names):
+if any(n.endswith("/index.html") for n in names if n != "index.html"):
     raise SystemExit("FAIL: nested index.html")
+if len(names) != 1:
+    raise SystemExit(f"FAIL: expected single-file pack, got {len(names)} entries")
 if "crazygames.com" in html:
     raise SystemExit("FAIL: crazygames URL")
 if 'src="./src/main.ts"' in html:
@@ -206,17 +203,21 @@ if "tickSurvival" not in html:
     raise SystemExit("FAIL: game code not in index.html")
 if html.count("\\n") < 200:
     raise SystemExit("FAIL: looks minified")
-if "vendor/three.module.js" not in html:
-    raise SystemExit("FAIL: three not in vendor import map")
-if "vendor/three.core.js" not in str(names):
-    raise SystemExit("FAIL: three.core.js missing from vendor (r178 sibling)")
+if "vendor/three.module.js" in html:
+    raise SystemExit("FAIL: pack still references vendor/ modules")
+if "./models/parachute.glb" not in html:
+    raise SystemExit("FAIL: asset manifest missing")
+if "import.meta.env.CONTEST" in html and "contest" not in html:
+    raise SystemExit("FAIL: contest flag lost")
+if "setDecoderPath" in html and "CONTEST" not in html:
+    raise SystemExit("FAIL: draco always-on but no contest bypass")
 mb = Path(sys.argv[1]).stat().st_size / (1024 * 1024)
 print(f"size {mb:.2f} MB")
 if mb > 35:
     raise SystemExit("FAIL: zip exceeds 35MB")
-print("OK: readable unminified index.html, vendor three, under 35MB")
+print("OK: single-file self-contained index.html, works from file:// and any host")
 `;
-  const out = execFileSync('python3', ['-c', script, zpath], { encoding: 'utf8' });
+  const out = execFileSync('python3', ['-c', script, zpath], { encoding: 'utf-8' });
   process.stdout.write(out);
 }
 
@@ -236,8 +237,6 @@ if (!esbuildOk) {
   });
 }
 
-copyVendor();
-copyAssets();
 const { build } = await import('esbuild');
 await bundleGame(build);
 writeIndex();
