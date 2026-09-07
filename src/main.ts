@@ -107,6 +107,7 @@ const composer = createComposer(renderer, scene, camera);
 const clock = new THREE.Clock();
 const raycaster = new THREE.Raycaster();
 const down = new THREE.Vector3(0, -1, 0);
+const _launchAhead = new THREE.Vector3();
 const scratch = new THREE.Vector3();
 const wind = new THREE.Vector3();
 
@@ -161,15 +162,24 @@ const sampleGround = (origin: THREE.Vector3): number | null => {
   return hit ? hit.point.y : terrain.sampleHeight(origin.x, origin.z);
 };
 
+const _clearFwd = new THREE.Vector3();
+const _clearFlat = new THREE.Vector3();
 const sampleClearance = (origin: THREE.Vector3, heading: number): { clearance: number; lateral: number } => {
   if (!terrain) return { clearance: 80, lateral: 80 };
   // Probe the flight direction (and slightly below it for rising terrain),
   // plus down for ground proximity. Sideways rays never saw the cliff ahead.
-  const fwd = new THREE.Vector3(Math.sin(heading), -0.12, Math.cos(heading)).normalize();
+  _clearFwd.set(Math.sin(heading), -0.12, Math.cos(heading)).normalize();
+  _clearFlat.set(_clearFwd.x, 0, _clearFwd.z).normalize();
+  // Lateral spacing (flat forward ray, no down component): flying low over
+  // flat terrain is not a "near miss" — only brush-distance to something
+  // AHEAD (a cliff face, a ridge wall) counts.
+  raycaster.set(origin, _clearFlat);
+  raycaster.far = NEAR_MISS_MAX + 2;
+  const lateralHit = raycaster.intersectObject(terrain.collision, true)[0];
   const dirs = [
     down,
-    fwd,
-    new THREE.Vector3(fwd.x, 0, fwd.z).normalize(),
+    _clearFwd,
+    _clearFlat,
   ];
   let best = 80;
   for (const dir of dirs) {
@@ -178,13 +188,6 @@ const sampleClearance = (origin: THREE.Vector3, heading: number): { clearance: n
     const hit = raycaster.intersectObject(terrain.collision, true)[0];
     if (hit) best = Math.min(best, hit.distance);
   }
-  // Lateral spacing only (forward ray, no down ray): flying low over flat
-  // terrain is not a "near miss" — only brush-distance to something AHEAD
-  // (a cliff face, a ridge wall) counts.
-  const flat = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();
-  raycaster.set(origin, flat);
-  raycaster.far = NEAR_MISS_MAX + 2;
-  const lateralHit = raycaster.intersectObject(terrain.collision, true)[0];
   return { clearance: best, lateral: lateralHit ? lateralHit.distance : 80 };
 };
 
@@ -499,7 +502,9 @@ function tickPlay(dt: number): void {
 
   if (session.phase === 'launch' && launch) {
     const groundY = sampleGround(pos);
-    const ahead = pos.clone().add(new THREE.Vector3(Math.sin(launch.heading) * 6, 0, Math.cos(launch.heading) * 6));
+    const ahead = _launchAhead.copy(pos).add(
+      new THREE.Vector3(Math.sin(launch.heading) * 6, 0, Math.cos(launch.heading) * 6),
+    );
     const aheadGround = sampleGround(ahead);
     const wantRun = input.state.speedBar > 0.2 || input.state.dive > 0.2;
     const stage = stepLaunch(launch, pos, groundY, aheadGround, wantRun, dt);

@@ -99,6 +99,11 @@ function copyVendor() {
     path.join(ROOT, 'node_modules/three/build/three.module.js'),
     path.join(vendor, 'three.module.js'),
   );
+  // three r178+: three.module.js re-exports from a sibling three.core.js.
+  fs.copyFileSync(
+    path.join(ROOT, 'node_modules/three/build/three.core.js'),
+    path.join(vendor, 'three.core.js'),
+  );
   const needed = [
     'objects/Sky.js',
     'objects/Water.js',
@@ -203,6 +208,8 @@ if html.count("\\n") < 200:
     raise SystemExit("FAIL: looks minified")
 if "vendor/three.module.js" not in html:
     raise SystemExit("FAIL: three not in vendor import map")
+if "vendor/three.core.js" not in str(names):
+    raise SystemExit("FAIL: three.core.js missing from vendor (r178 sibling)")
 mb = Path(sys.argv[1]).stat().st_size / (1024 * 1024)
 print(f"size {mb:.2f} MB")
 if mb > 35:

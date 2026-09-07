@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { dracoGltfLoader } from './gltf';
 import { WORLD_SIZE } from '../config/constants';
 import type { LevelDef } from './types';
 import { fbm, valueNoise } from './math';
@@ -20,13 +19,7 @@ export interface TerrainWorld {
   dispose: () => void;
 }
 
-const loader = (() => {
-  const draco = new DRACOLoader();
-  draco.setDecoderPath('./draco/');
-  const gltf = new GLTFLoader();
-  gltf.setDRACOLoader(draco);
-  return gltf;
-})();
+const loader = dracoGltfLoader();
 
 export function pathPoint(level: LevelDef, t: number): { x: number; z: number; floor: number } {
   const { path } = level;

@@ -85,6 +85,31 @@ export function setTerrainSource(hud: HudRefs, studio: boolean, asset: string): 
   hud.source.textContent = studio ? `Terrain Studio · ${asset}.glb` : 'Procedural fallback';
 }
 
+// Per-frame HUD writes go through a change-detector: setting textContent to
+// the same string still rebuilds text nodes and invalidates layout every frame.
+const _hudTextCache = new WeakMap<HTMLElement, string>();
+function setText(el: HTMLElement, value: string): void {
+  if (_hudTextCache.get(el) === value) return;
+  _hudTextCache.set(el, value);
+  el.textContent = value;
+}
+
+const _styleCache = new WeakMap<HTMLElement, { transform?: string; width?: string }>();
+function setTransform(el: HTMLElement, value: string): void {
+  const c = _styleCache.get(el) ?? {};
+  if (c.transform === value) return;
+  c.transform = value;
+  _styleCache.set(el, c);
+  el.style.transform = value;
+}
+function setWidth(el: HTMLElement, value: string): void {
+  const c = _styleCache.get(el) ?? {};
+  if (c.width === value) return;
+  c.width = value;
+  _styleCache.set(el, c);
+  el.style.width = value;
+}
+
 export function paintHud(
   hud: HudRefs,
   score: ScoreState,
@@ -94,27 +119,27 @@ export function paintHud(
   ringsTotal: number,
   nextHint?: string,
 ): void {
-  hud.score.textContent = Math.floor(score.total).toLocaleString();
-  hud.combo.textContent = `${score.combo.toFixed(0)}×`;
+  setText(hud.score, Math.floor(score.total).toLocaleString());
+  setText(hud.combo, `${score.combo.toFixed(0)}×`);
   hud.combo.classList.toggle('hot', score.combo >= 3);
-  hud.boost.style.width = `${(flight.boost / BOOST_MAX) * 100}%`;
+  setWidth(hud.boost, `${(flight.boost / BOOST_MAX) * 100}%`);
   hud.boost.parentElement?.classList.toggle('boosting', flight.boosting || flight.speedBoost > 0);
-  hud.rings.textContent = `${ringsHit}/${ringsTotal}`;
-  hud.spd.textContent = `${(flight.speed * 3.6).toFixed(0)}`;
-  hud.agl.textContent = `${Math.max(0, flight.agl).toFixed(0)}`;
-  hud.asl.textContent = `${Math.max(0, flight.asl).toFixed(0)}`;
+  setText(hud.rings, `${ringsHit}/${ringsTotal}`);
+  setText(hud.spd, `${(flight.speed * 3.6).toFixed(0)}`);
+  setText(hud.agl, `${Math.max(0, flight.agl).toFixed(0)}`);
+  setText(hud.asl, `${Math.max(0, flight.asl).toFixed(0)}`);
   const vari = flight.verticalSpeed;
-  hud.vario.textContent = `${vari >= 0 ? '+' : ''}${vari.toFixed(1)}`;
+  setText(hud.vario, `${vari >= 0 ? '+' : ''}${vari.toFixed(1)}`);
   hud.vario.classList.toggle('lift', vari > 0.15);
   hud.vario.classList.toggle('sink', vari < -0.15);
   const liveGlide = vari < -0.05 ? flight.speed / Math.abs(vari) : 99;
-  hud.glide.textContent = liveGlide > 40 ? '∞' : liveGlide.toFixed(1);
-  hud.time.textContent = formatTime(timeLeft);
+  setText(hud.glide, liveGlide > 40 ? '∞' : liveGlide.toFixed(1));
+  setText(hud.time, formatTime(timeLeft));
   hud.time.classList.toggle('low', timeLeft < 16);
-  const hint = document.querySelector('#hud-hint');
-  if (hint) hint.textContent = nextHint ?? 'Fly through the next glowing ring';
+  const hint = document.querySelector<HTMLElement>('#hud-hint');
+  if (hint) setText(hint, nextHint ?? 'Fly through the next glowing ring');
   const deg = ((180 / Math.PI) * flight.heading % 360 + 360) % 360;
-  hud.compass.style.transform = `rotate(${-deg}deg)`;
+  setTransform(hud.compass, `rotate(${-deg}deg)`);
 
   const tags: string[] = [];
   if (flight.inThermal) tags.push('THERMAL +3.5');
@@ -122,7 +147,7 @@ export function paintHud(
   if (flight.nearMiss) tags.push('NEAR MISS');
   if (flight.speedBoost > 0) tags.push('SPEED ×2');
   hud.chip.hidden = tags.length === 0;
-  hud.chip.textContent = tags.join('  ·  ');
+  setText(hud.chip, tags.join('  ·  '));
   hud.chip.classList.toggle('danger', flight.inDowndraft);
   hud.chip.classList.toggle('lift', flight.inThermal || flight.nearMiss);
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { dracoGltfLoader } from '../game/gltf';
 import {
   loadMixamoPilot,
   mixamoHandAnchors,
@@ -1154,9 +1155,15 @@ function isHelperMesh(mesh: THREE.Mesh): boolean {
   return dims[0] < 0.02 && area > 0.15;
 }
 
+// Shared Draco-capable loader (see src/game/gltf.ts) — one decoder, one fetch.
+let _gltfLoader: GLTFLoader | null = null;
+function gltfLoader(): GLTFLoader {
+  return (_gltfLoader ??= dracoGltfLoader());
+}
+
 async function loadGlbScene(url: string, _doubleSide = false): Promise<THREE.Group | null> {
   try {
-    const gltf = await new GLTFLoader().loadAsync(url);
+    const gltf = await gltfLoader().loadAsync(url);
     const scene = gltf.scene;
     const drop: THREE.Mesh[] = [];
     scene.traverse((child) => {

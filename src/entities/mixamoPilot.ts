@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { dracoGltfLoader } from '../game/gltf';
 import { damp } from '../game/math';
 import type { FlightState } from '../game/types';
 
@@ -141,9 +142,15 @@ function makeGrip(name: string, bone: THREE.Bone | undefined): THREE.Object3D {
   return grip;
 }
 
+// Shared Draco-capable loader (see src/game/gltf.ts) — one decoder, one fetch.
+let _gltfLoader: GLTFLoader | null = null;
+function gltfLoader(): GLTFLoader {
+  return (_gltfLoader ??= dracoGltfLoader());
+}
+
 export async function loadMixamoPilot(): Promise<MixamoPilot | null> {
   try {
-    const gltf = await new GLTFLoader().loadAsync('./models/mixamo/pilot.glb');
+    const gltf = await gltfLoader().loadAsync('./models/mixamo/pilot.glb');
     const root = gltf.scene;
     root.name = 'Mixamo_Pilot';
     paintPilot(root);
