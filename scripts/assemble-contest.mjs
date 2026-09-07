@@ -35,7 +35,9 @@ const require = createRequire(import.meta.url);
 // GLBs: decoder-free versions from contest/assets (draco removed — the pack
 // must run from file:// too, where the WASM decoder's Worker is blocked).
 const GLB_ASSETS = [
-  ['models/parachute.glb', 'parachute.glb'],
+  // NOTE: no parachute.glb — the studio asset is a round DOME parachute,
+  // not a paraglider wing; the procedural ram-air wing is the canopy
+  // (see src/entities/glider.ts attachStudioAssets). Only the pilot ships.
   ['models/mixamo/pilot.glb', 'pilot-mixamo.glb'],
   ['models/pilot.glb', 'pilot.glb'],
   ['terrains/mountain.glb', 'mountain.glb'],
@@ -267,7 +269,7 @@ if "vendor/three.module.js" not in names:
     raise SystemExit("FAIL: vendor/three.module.js missing")
 if "vendor/addons/loaders/GLTFLoader.js" not in names:
     raise SystemExit("FAIL: vendor addons missing")
-if "models/parachute.glb" not in names or "terrains/mountain.glb" not in names:
+if "models/mixamo/pilot.glb" not in names or "terrains/mountain.glb" not in names:
     raise SystemExit("FAIL: assets missing")
 if not names or not any(n.startswith("audio/") for n in names):
     raise SystemExit("FAIL: audio missing")
